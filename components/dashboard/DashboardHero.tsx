@@ -1,0 +1,66 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { FlowSignature } from "@/components/shared/FlowSignature";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
+import type { LearnerProfile } from "@/lib/types";
+
+export function DashboardHero({ profile }: { profile: LearnerProfile }) {
+  return (
+    <div className="relative overflow-hidden rounded-[28px] border border-line bg-paper-raised px-6 py-10 shadow-soft-lg sm:px-12 sm:py-14">
+      <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-lavender/40 blur-3xl" />
+      <div className="pointer-events-none absolute -left-16 bottom-0 h-48 w-48 rounded-full bg-amber-soft/60 blur-3xl" />
+
+      <div className="relative grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Badge variant="dark" size="sm" className="mb-5">
+            Day {profile.streakDays} streak
+          </Badge>
+          <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight text-ink sm:text-4xl lg:text-[3.2rem] lg:leading-[1.08]">
+            We don&apos;t just score
+            <br />
+            how you speak.
+            <br />
+            <span className="italic text-lavender-ink">We find where it breaks.</span>
+          </h1>
+          <p className="mt-5 max-w-md text-[15px] leading-relaxed text-ink-soft">
+            Pitchground watches for the exact moment your communication deteriorates under pressure,
+            diagnoses why, and builds a targeted drill until you fix it — not a generic score.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link href="/start">
+              <Button size="lg">Start training</Button>
+            </Link>
+            <Link href="/profile">
+              <Button size="lg" variant="outline">
+                View your profile
+              </Button>
+            </Link>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+          className="relative"
+        >
+          <div className="rounded-2xl border border-line bg-paper px-5 py-6 shadow-soft">
+            <FlowSignature className="h-40 w-full" />
+            <div className="mt-3 flex items-center justify-between text-xs font-medium text-muted">
+              <span>Rambling</span>
+              <span className="font-mono text-[11px] text-ink-soft">Definition → Reason → Example</span>
+              <span>Structured</span>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}

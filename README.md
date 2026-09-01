@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pitchground — Adaptive Communication Training
 
-## Getting Started
+Frontend for the iQOO ReSkill 2026 hackathon MVP. Built with Next.js (App Router), TypeScript,
+Tailwind CSS v4, and Framer Motion. All data is mocked — see `mock/` and `services/` — so the
+full adaptive interview loop works with **no backend**.
 
-First, run the development server:
+## Run it
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. Start on the dashboard, click **Start training**, and run the full
+loop: baseline → pressure round → diagnosis → targeted challenge → failure replay → retry →
+improvement → updated dashboard.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+app/                 routes: dashboard (/), /start, /interview, /profile
+components/
+  ui/                Button, Card, Badge, Progress — small primitives
+  shared/             Nav, Logo, FlowSignature (signature visual), OptionGrid, DeltaRow
+  dashboard/          dashboard-only sections
+  interview/          the full interview flow + its screens
+  profile/            learner profile sections
+mock/                deterministic mock data (learner, sessions, scenarios, questions, analysis, transcripts)
+services/            thin async service layer the UI calls — mirrors the future FastAPI routes
+                     in the PRD (POST /sessions, POST /attempts/{id}/analyze, etc). Swap the
+                     bodies of these functions for real fetch() calls later; no UI changes needed.
+lib/types.ts         shared domain types
+```
 
-## Learn More
+## Design
 
-To learn more about Next.js, take a look at the following resources:
+Self-contained cream/serif theme (Fraunces display + Inter body), inspired by the supplied
+reference screenshot: warm paper background, pill buttons, dark pill badges, soft elevation.
+The signature visual (`components/shared/FlowSignature.tsx`) is a hand-built SVG that morphs a
+jagged "rambling" waveform into a clean Definition → Reason → Example path — the product's core
+thesis, drawn.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Fonts are self-hosted via `@fontsource/*` so builds don't depend on reaching Google Fonts.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## New in this pass
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Landing page** (`/`) — public marketing page inspired by wisprflow.ai: looping
+  scribble text behind the headline, a diagonal marquee ribbon, an animated waveform
+  pill, a philosophy loop stepper (Observe → Compare → Diagnose → Remember → Target →
+  Recreate → Retry → Measure → Learn), a multimodal-signals grid, and a knowledge-vs-
+  English-articulation teaser.
+- **Auth** — `/login` and `/signup` (mock, localStorage-backed via `lib/auth.ts`).
+  All app routes now live under `app/(app)/` behind `RequireAuth`, which redirects to
+  `/login` if no session exists.
+- **Language diagnostic flow** (`/language-diagnostic`) — comfortable-language attempt
+  vs. English attempt, side-by-side comparison, PRD §11–15.
+- **Recovery training flow** (`/recovery-training`) — AI interrupts mid-answer, measures
+  recovery time/verdict, PRD §25.
+- **Diagnosis confidence** — `FailureDiagnosis` now carries `confidence` + `occurrences`,
+  shown on the diagnosis screen, PRD §20.
+- **Communication graph** — simple animated node graph on the profile page, PRD §28.
+- Dashboard gained a "Training modes" quick-launch row linking to all three flows.
