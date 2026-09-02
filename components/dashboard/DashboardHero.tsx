@@ -49,7 +49,7 @@ export function DashboardHero({ profile }: { profile: LearnerProfile }) {
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-          className="relative"
+          className="relative hidden md:block"
         >
           <div className="rounded-2xl border border-line bg-paper px-5 py-6 shadow-soft">
             <FlowSignature className="h-40 w-full" />

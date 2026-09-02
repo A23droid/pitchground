@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 // Self-hosted via @fontsource so the build never depends on reaching
 // fonts.googleapis.com at build time.
@@ -15,8 +15,7 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/600.css";
 import "./globals.css";
-
-import type { Metadata, Viewport } from "next";
+import { AuthProvider } from "@/components/shared/AuthProvider";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -33,7 +32,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

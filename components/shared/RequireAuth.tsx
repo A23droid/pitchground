@@ -2,20 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAuth } from "@/lib/auth";
+import { useSession } from "next-auth/react";
+import { getAuth, saveAuth } from "@/lib/auth";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const session = getAuth();
-    if (!session) {
+    if (status === "loading") return;
+
+    if (session?.user?.email) {
+      saveAuth({
+        name: session.user.name || session.user.email.split("@")[0],
+        email: session.user.email,
+      });
+      setReady(true);
+      return;
+    }
+
+    const local = getAuth();
+    if (!local) {
       router.replace("/login");
       return;
     }
     setReady(true);
-  }, [router]);
+  }, [router, session, status]);
 
   if (!ready) {
     return (

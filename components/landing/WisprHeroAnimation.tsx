@@ -155,8 +155,7 @@ export function WisprHeroAnimation({
       {/* SVG Canvas for Text-on-Path */}
       <svg
         viewBox="0 0 1600 700"
-        className="pointer-events-none w-full overflow-visible"
-        style={{ minHeight: "560px" }}
+        className="pointer-events-none w-full overflow-visible min-h-[380px] sm:min-h-[560px]"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         preserveAspectRatio="xMidYMid meet"

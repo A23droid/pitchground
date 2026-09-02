@@ -224,8 +224,8 @@ export default function DebateArenaPage() {
       currentTurn === "user-opening"
         ? script.userOpening
         : currentTurn === "user-rebuttal"
-        ? script.userRebuttal
-        : script.userClosing;
+          ? script.userRebuttal
+          : script.userClosing;
 
     let i = 0;
     const speed = currentTurn === "user-opening" ? 18 : 14;
@@ -295,8 +295,8 @@ export default function DebateArenaPage() {
       currentTurn === "user-opening"
         ? script.userOpening
         : currentTurn === "user-rebuttal"
-        ? script.userRebuttal
-        : script.userClosing;
+          ? script.userRebuttal
+          : script.userClosing;
     setUserTypedTranscript(targetFullText);
     setUserSpeechPhase("finished");
   }
@@ -377,7 +377,7 @@ export default function DebateArenaPage() {
   return (
     <div className="mx-auto mt-4 w-full max-w-6xl px-3 pb-24 sm:mt-6 sm:px-6">
       {/* Breadcrumbs Header */}
-      <div className="mb-4 flex items-center justify-between">
+      {/* <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2 overflow-hidden">
           <Link
             href="/dashboard"
@@ -397,7 +397,7 @@ export default function DebateArenaPage() {
             {activeTurnInfo.badgeLabel}
           </Badge>
         )}
-      </div>
+      </div> */}
 
       <AnimatePresence mode="wait">
         {/* 1. SETUP SCREEN */}
@@ -440,11 +440,10 @@ export default function DebateArenaPage() {
                     key={t.id}
                     type="button"
                     onClick={() => setSelectedTopic(t)}
-                    className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all ${
-                      selectedTopic.id === t.id
-                        ? "border-lavender-strong bg-lavender/30 shadow-soft"
-                        : "border-line bg-paper-raised hover:border-line-strong"
-                    }`}
+                    className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all ${selectedTopic.id === t.id
+                      ? "border-lavender-strong bg-lavender/30 shadow-soft"
+                      : "border-line bg-paper-raised hover:border-line-strong"
+                      }`}
                   >
                     <Badge variant={selectedTopic.id === t.id ? "lavender" : "outline"} size="sm" className="mb-2">
                       {t.category}
@@ -469,11 +468,10 @@ export default function DebateArenaPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedPosition("For")}
-                  className={`rounded-2xl border p-4 text-left transition-all ${
-                    selectedPosition === "For"
-                      ? "border-teal bg-teal-soft/40 shadow-soft"
-                      : "border-line bg-paper-raised hover:border-line-strong"
-                  }`}
+                  className={`rounded-2xl border p-4 text-left transition-all ${selectedPosition === "For"
+                    ? "border-teal bg-teal-soft/40 shadow-soft"
+                    : "border-line bg-paper-raised hover:border-line-strong"
+                    }`}
                 >
                   <p className="font-display text-sm font-semibold text-teal-ink">FOR (In favor)</p>
                   <p className="mt-1 text-xs text-ink-soft">{selectedTopic.forPerspective}</p>
@@ -482,11 +480,10 @@ export default function DebateArenaPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedPosition("Against")}
-                  className={`rounded-2xl border p-4 text-left transition-all ${
-                    selectedPosition === "Against"
-                      ? "border-amber bg-amber-soft/40 shadow-soft"
-                      : "border-line bg-paper-raised hover:border-line-strong"
-                  }`}
+                  className={`rounded-2xl border p-4 text-left transition-all ${selectedPosition === "Against"
+                    ? "border-amber bg-amber-soft/40 shadow-soft"
+                    : "border-line bg-paper-raised hover:border-line-strong"
+                    }`}
                 >
                   <p className="font-display text-sm font-semibold text-amber-ink">AGAINST (Opposition)</p>
                   <p className="mt-1 text-xs text-ink-soft">{selectedTopic.againstPerspective}</p>
@@ -599,8 +596,8 @@ export default function DebateArenaPage() {
                               ? "bg-teal-soft font-semibold text-teal-ink ring-1 ring-teal/40"
                               : "bg-lavender font-semibold text-lavender-ink ring-1 ring-lavender-strong/50"
                             : isPast
-                            ? "bg-black/[0.04] text-ink-soft opacity-80"
-                            : "text-muted opacity-50",
+                              ? "bg-black/[0.04] text-ink-soft opacity-80"
+                              : "text-muted opacity-50",
                         )}
                       >
                         <span className="font-mono text-[10px]">T{info.turnNumber}</span>
@@ -612,121 +609,127 @@ export default function DebateArenaPage() {
               </div>
             </Card>
 
-            {/* 50/50 TRUE SPLIT ARENA: YOU (LEFT) ─── AI OPPONENT (RIGHT) */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {/* ─────────────────────────────────────────────────────────────
-                  LEFT PARTICIPANT: YOU
-              ───────────────────────────────────────────────────────────── */}
-              <Card
-                className={cn(
-                  "relative flex flex-col overflow-hidden transition-all duration-300",
-                  isUserTurn
-                    ? "border-teal shadow-soft-lg ring-2 ring-teal/20"
-                    : "border-line bg-paper/60 opacity-80",
-                )}
-              >
-                {/* User Header */}
-                <div className="flex items-center justify-between border-b border-line p-3 sm:px-4">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-full text-white shadow-soft transition-colors",
-                        isUserTurn ? "bg-teal" : "bg-ink/50",
-                      )}
-                    >
-                      <User size={15} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-ink">You (Human)</p>
-                      <p className="text-[11px] text-ink-soft">
-                        Position: <span className="font-semibold text-teal-ink">{selectedPosition}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <Badge variant={isUserTurn ? "teal" : "outline"} size="sm">
-                    {isUserTurn
-                      ? userSpeechPhase === "speaking"
-                        ? "Active · Speaking"
-                        : "Your Turn"
-                      : "Listening"}
-                  </Badge>
+            {/* ═══════════════════════════════════════════════════════════════
+                MOBILE LAYOUT: Layered stacked phone UI (hidden on lg+)
+            ═══════════════════════════════════════════════════════════════ */}
+            <div className="flex flex-col gap-0 overflow-hidden rounded-2xl border border-line shadow-soft lg:hidden">
+              {/* Layer 1: Context — Topic + Turn Indicator */}
+              {/* <div className="flex items-center justify-between border-b border-line bg-paper-raised px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    {selectedTopic.category}
+                  </p>
+                  <p className="truncate font-display text-sm font-bold text-ink">
+                    {selectedTopic.title.length > 30
+                      ? selectedTopic.title.slice(0, 30) + "…"
+                      : selectedTopic.title}
+                  </p>
+                  <p className="text-[11px] text-ink-soft">
+                    You: <span className="font-semibold text-teal-ink">{selectedPosition}</span>
+                  </p>
                 </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide",
+                      isUserTurn ? "bg-teal text-white" : "bg-ink text-lavender",
+                    )}
+                  >
+                    <span className={cn("h-1.5 w-1.5 animate-pulse rounded-full", isUserTurn ? "bg-white" : "bg-lavender-strong")} />
+                    {isUserTurn ? "Your Turn" : "AI Turn"}
+                  </div>
+                  <p className="font-mono text-[10px] text-muted">
+                    Turn {activeTurnInfo.turnNumber} / 5
+                  </p>
+                </div>
+              </div> */}
 
-                {/* User Live Camera & Status Viewport */}
-                <div className="relative aspect-[16/10] w-full overflow-hidden bg-teal lg:aspect-auto lg:h-[230px]">
+              {/* Layer 2: Video Stage */}
+              <div className="relative w-full overflow-hidden bg-[#0d0b08]">
+                {/* User Camera */}
+                <div className="relative aspect-[4/3] w-full bg-gradient-to-br from-teal to-[#091b18]">
                   <video
                     ref={videoRef}
                     autoPlay
                     muted
                     playsInline
                     className={cn(
-                      "h-full w-full scale-x-[-1] object-cover transition-opacity",
+                      "h-full w-full scale-x-[-1] object-cover",
                       cameraState !== "live" && "hidden",
-                      !isUserTurn && "opacity-70",
                     )}
                   />
                   {cameraState !== "live" && (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-teal to-[#091b18] text-white">
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-white">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
-                        <CameraOff size={18} />
+                        <CameraOff size={20} />
                       </div>
-                      <p className="text-xs text-white/70">
-                        {cameraState === "pending" ? "Connecting video…" : "Demo Video Preview Mode"}
+                      <p className="text-xs text-white/60">
+                        {cameraState === "pending" ? "Connecting camera…" : "Demo Camera Mode"}
                       </p>
                     </div>
                   )}
 
-                  {/* Overlays */}
-                  <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5">
+                  {/* Camera label */}
+                  <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5">
+                    <span className="flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white/80 backdrop-blur-sm">
+                      <Camera size={9} />
+                      Your Camera
+                    </span>
                     {isUserTurn && userSpeechPhase === "speaking" && (
-                      <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+                      <span className="flex items-center gap-1 rounded-full bg-teal/80 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber" />
                         Live Mic
                       </span>
                     )}
-                    <span className="flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white/80 backdrop-blur-sm">
-                      <Camera size={9} />
-                      {cameraState === "live" ? "Cam Live" : "Demo Cam"}
-                    </span>
                   </div>
 
-                  {/* Timer Badge during User Turn */}
+                  {/* Timer */}
                   {isUserTurn && userSpeechPhase === "speaking" && (
-                    <div className="absolute right-2.5 top-2.5">
+                    <div className="absolute bottom-2.5 right-3">
                       <span
                         className={cn(
-                          "flex items-center gap-1 rounded-full px-2.5 py-0.5 font-mono text-xs font-semibold backdrop-blur-sm",
-                          secondsLeft <= 5 ? "bg-amber text-amber-ink" : "bg-black/50 text-white",
+                          "flex items-center gap-1 rounded-full px-2.5 py-1 font-mono text-xs font-bold backdrop-blur-sm",
+                          secondsLeft <= 5 ? "bg-amber text-amber-ink" : "bg-black/60 text-white",
                         )}
                       >
                         <TimerIcon size={11} />
-                        {String(secondsLeft).padStart(2, "0")}s
+                        {String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:{String(secondsLeft % 60).padStart(2, "0")}
                       </span>
                     </div>
                   )}
+
+                  {/* AI PiP overlay when AI is speaking */}
+                  {isAiTurn && (
+                    <div className="absolute right-3 top-3 flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-xl bg-ink/90 backdrop-blur-sm">
+                      <Bot size={18} className={isAiTurn ? "text-lavender" : "text-white/40"} />
+                      {isAiSpeaking && (
+                        <div className="flex items-center gap-0.5">
+                          {[3, 6, 9, 6, 3].map((h, i) => (
+                            <motion.span
+                              key={i}
+                              className="w-[2px] rounded-full bg-lavender-strong"
+                              animate={{ height: [2, h, 2] }}
+                              transition={{ duration: 0.5 + i * 0.1, repeat: Infinity, ease: "easeInOut" }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+              </div>
 
-                {/* User Live Transcript Box */}
-                <div className="flex flex-1 flex-col p-3 sm:p-4">
-                  <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted">
-                    <span className="flex items-center gap-1">
-                      <Mic size={11} />
-                      {activeTurnInfo.title}
-                    </span>
-                    {isUserTurn && (
-                      <span className="text-[11px] text-ink-soft">
-                        {activeTurnInfo.timeLimitSeconds}s target limit
-                      </span>
-                    )}
-                  </div>
+              {/* Layer 3: Live Transcript */}
+              <div className="flex flex-col gap-2 border-t border-line bg-paper p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Live Transcript</p>
 
-                  <div className="min-h-[110px] rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
+                {/* You */}
+                <div className="rounded-xl border border-line bg-paper-raised p-3">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-ink">You</p>
+                  <p className="min-h-[40px] text-xs leading-relaxed text-ink">
                     {isUserTurn ? (
                       userSpeechPhase === "ready" ? (
-                        <span className="text-muted">
-                          Click &quot;Start Answering&quot; below to deliver your {activeTurnInfo.title.toLowerCase()}…
-                        </span>
+                        <span className="italic text-muted">Tap &quot;Start Speaking&quot; below…</span>
                       ) : (
                         <>
                           {userTypedTranscript}
@@ -736,143 +739,19 @@ export default function DebateArenaPage() {
                         </>
                       )
                     ) : (
-                      <span className="text-muted italic">
-                        {debateHistory.userRebuttal
-                          ? `Your rebuttal: "${debateHistory.userRebuttal.slice(0, 100)}…"`
-                          : debateHistory.userOpening
-                          ? `Your opening: "${debateHistory.userOpening.slice(0, 100)}…"`
-                          : "Listening to opponent…"}
+                      <span className="italic text-muted">
+                        {debateHistory.userOpening
+                          ? `"${debateHistory.userOpening.slice(0, 80)}…"`
+                          : "Listening to AI…"}
                       </span>
                     )}
-                  </div>
-
-                  {/* User Turn Controls */}
-                  {isUserTurn && (
-                    <div className="mt-3 flex items-center justify-end gap-2">
-                      {userSpeechPhase === "ready" && (
-                        <Button size="sm" onClick={startUserSpeaking} className="bg-teal hover:bg-teal/90 text-white">
-                          <Mic size={14} />
-                          Start Answering ({activeTurnInfo.timeLimitSeconds}s)
-                        </Button>
-                      )}
-                      {userSpeechPhase === "speaking" && (
-                        <Button size="sm" variant="outline" onClick={finishUserSpeech}>
-                          End Response
-                        </Button>
-                      )}
-                      {userSpeechPhase === "finished" && (
-                        <Button size="sm" onClick={submitUserTurn} className="bg-teal hover:bg-teal/90 text-white">
-                          Submit Turn
-                          <ArrowRight size={14} />
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              {/* ─────────────────────────────────────────────────────────────
-                  RIGHT PARTICIPANT: AI OPPONENT
-              ───────────────────────────────────────────────────────────── */}
-              <Card
-                className={cn(
-                  "relative flex flex-col overflow-hidden transition-all duration-300",
-                  isAiTurn
-                    ? "border-lavender-strong shadow-soft-lg ring-2 ring-lavender-strong/30"
-                    : "border-line bg-paper/60 opacity-80",
-                )}
-              >
-                {/* AI Header */}
-                <div className="flex items-center justify-between border-b border-line p-3 sm:px-4">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-full text-white shadow-soft transition-colors",
-                        isAiTurn ? "bg-ink text-lavender" : "bg-ink/50",
-                      )}
-                    >
-                      <Bot size={15} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-ink">AI Opponent</p>
-                      <p className="text-[11px] text-ink-soft">
-                        Position: <span className="font-semibold text-amber-ink">{opponentPosition}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <Badge variant={isAiTurn ? "lavender" : "outline"} size="sm">
-                    {isAiTurn
-                      ? isAiSpeaking
-                        ? "Active · Countering"
-                        : "Finished Counter"
-                      : "Listening to You"}
-                  </Badge>
+                  </p>
                 </div>
 
-                {/* AI Visual Presence Viewport */}
-                <div className="relative aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#1a1714] via-[#221e19] to-[#12100d] p-4 text-white lg:aspect-auto lg:h-[230px]">
-                  <div className="flex h-full flex-col items-center justify-center gap-3">
-                    <div
-                      className={cn(
-                        "relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all",
-                        isAiTurn
-                          ? "border-lavender-strong bg-lavender/20 shadow-[0_0_24px_rgba(207,189,247,0.3)]"
-                          : "border-white/20 bg-white/5",
-                      )}
-                    >
-                      <Bot size={24} className={isAiTurn ? "text-lavender" : "text-white/60"} />
-                      {isAiTurn && isAiSpeaking && (
-                        <span className="absolute inset-0 animate-ping rounded-full border border-lavender-strong opacity-40" />
-                      )}
-                    </div>
-
-                    {/* Dynamic Equalizer Waveform Bars when AI is active */}
-                    <div className="flex items-center gap-1">
-                      {[4, 12, 20, 10, 16, 26, 14, 22, 8, 18, 12, 5].map((h, i) => (
-                        <motion.span
-                          key={i}
-                          className={cn("w-[3px] rounded-full", isAiTurn ? "bg-lavender-strong" : "bg-white/20")}
-                          animate={
-                            isAiTurn && isAiSpeaking
-                              ? { height: [4, h, 4] }
-                              : { height: 4 }
-                          }
-                          transition={{
-                            duration: 0.5 + (i % 3) * 0.12,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                          }}
-                        />
-                      ))}
-                    </div>
-
-                    <p className="text-[11px] text-white/70">
-                      {isAiTurn
-                        ? isAiSpeaking
-                          ? "Synthesizing and delivering adversarial pushback…"
-                          : "Counterargument delivered"
-                        : "Evaluating your argument logic and premise…"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* AI Live Transcript Box */}
-                <div className="flex flex-1 flex-col p-3 sm:p-4">
-                  <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted">
-                    <span className="flex items-center gap-1">
-                      <ShieldAlert size={11} className="text-amber-ink" />
-                      AI Argument Output
-                    </span>
-                    {isAiTurn && (
-                      <span className="flex items-center gap-1 text-[11px] text-ink-soft">
-                        <Volume2 size={11} className="animate-pulse text-lavender-ink" />
-                        Live Voice
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="min-h-[110px] rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
+                {/* AI */}
+                <div className="rounded-xl border border-line bg-paper-raised p-3">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-lavender-ink">AI</p>
+                  <p className="min-h-[40px] text-xs leading-relaxed text-ink">
                     {isAiTurn ? (
                       <>
                         {aiTypedTranscript}
@@ -881,49 +760,336 @@ export default function DebateArenaPage() {
                         )}
                       </>
                     ) : (
-                      <span className="text-muted italic">
+                      <span className="italic text-muted">
                         {debateHistory.aiCounter1
-                          ? `Previous Counter: "${debateHistory.aiCounter1.slice(0, 110)}…"`
-                          : "AI is listening to your premise…"}
+                          ? `"${debateHistory.aiCounter1.slice(0, 80)}…"`
+                          : "Listening to your argument…"}
                       </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Sticky Bottom Action Bar */}
+              <div className="sticky bottom-0 border-t border-line bg-paper-raised/95 px-4 py-3 backdrop-blur-sm">
+                {isUserTurn && (
+                  <div className="flex items-center gap-2">
+                    {userSpeechPhase === "ready" && (
+                      <Button
+                        size="lg"
+                        onClick={startUserSpeaking}
+                        className="w-full justify-center bg-teal text-white hover:bg-teal/90"
+                      >
+                        <Mic size={16} />
+                        Start Speaking
+                      </Button>
+                    )}
+                    {userSpeechPhase === "speaking" && (
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={finishUserSpeech}
+                        className="w-full justify-center"
+                      >
+                        End Response
+                      </Button>
+                    )}
+                    {userSpeechPhase === "finished" && (
+                      <Button
+                        size="lg"
+                        onClick={submitUserTurn}
+                        className="w-full justify-center bg-teal text-white hover:bg-teal/90"
+                      >
+                        Submit Turn
+                        <ArrowRight size={16} />
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {isAiTurn && (
+                  <Button
+                    size="lg"
+                    onClick={advanceFromAiTurn}
+                    className="w-full justify-center bg-ink text-white hover:bg-ink/90"
+                  >
+                    {isAiSpeaking ? "Skip & Rebut Now" : "Deliver Your Rebuttal"}
+                    <ArrowRight size={16} />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* ═══════════════════════════════════════════════════════════════
+                DESKTOP LAYOUT: 50/50 two-column arena (hidden on mobile)
+            ═══════════════════════════════════════════════════════════════ */}
+            <div className="hidden flex-col gap-4 lg:flex">
+              {/* 50/50 TRUE SPLIT ARENA: YOU (LEFT) ─── AI OPPONENT (RIGHT) */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* ─── LEFT: YOU ─── */}
+                <Card
+                  className={cn(
+                    "relative flex flex-col overflow-hidden transition-all duration-300",
+                    isUserTurn
+                      ? "border-teal shadow-soft-lg ring-2 ring-teal/20"
+                      : "border-line bg-paper/60 opacity-80",
+                  )}
+                >
+                  <div className="flex items-center justify-between border-b border-line p-3 sm:px-4">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full text-white shadow-soft transition-colors",
+                          isUserTurn ? "bg-teal" : "bg-ink/50",
+                        )}
+                      >
+                        <User size={15} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-ink">You (Human)</p>
+                        <p className="text-[11px] text-ink-soft">
+                          Position: <span className="font-semibold text-teal-ink">{selectedPosition}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant={isUserTurn ? "teal" : "outline"} size="sm">
+                      {isUserTurn
+                        ? userSpeechPhase === "speaking"
+                          ? "Active · Speaking"
+                          : "Your Turn"
+                        : "Listening"}
+                    </Badge>
+                  </div>
+
+                  <div className="relative h-[230px] w-full overflow-hidden bg-teal">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className={cn(
+                        "h-full w-full scale-x-[-1] object-cover transition-opacity",
+                        cameraState !== "live" && "hidden",
+                        !isUserTurn && "opacity-70",
+                      )}
+                    />
+                    {cameraState !== "live" && (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-teal to-[#091b18] text-white">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10">
+                          <CameraOff size={18} />
+                        </div>
+                        <p className="text-xs text-white/70">
+                          {cameraState === "pending" ? "Connecting video…" : "Demo Video Preview Mode"}
+                        </p>
+                      </div>
+                    )}
+                    <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5">
+                      {isUserTurn && userSpeechPhase === "speaking" && (
+                        <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber" />
+                          Live Mic
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white/80 backdrop-blur-sm">
+                        <Camera size={9} />
+                        {cameraState === "live" ? "Cam Live" : "Demo Cam"}
+                      </span>
+                    </div>
+                    {isUserTurn && userSpeechPhase === "speaking" && (
+                      <div className="absolute right-2.5 top-2.5">
+                        <span
+                          className={cn(
+                            "flex items-center gap-1 rounded-full px-2.5 py-0.5 font-mono text-xs font-semibold backdrop-blur-sm",
+                            secondsLeft <= 5 ? "bg-amber text-amber-ink" : "bg-black/50 text-white",
+                          )}
+                        >
+                          <TimerIcon size={11} />
+                          {String(secondsLeft).padStart(2, "0")}s
+                        </span>
+                      </div>
                     )}
                   </div>
 
-                  {/* AI Turn Action */}
-                  {isAiTurn && (
-                    <div className="mt-3 flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        onClick={advanceFromAiTurn}
-                        className="bg-ink hover:bg-ink/90 text-white"
-                      >
-                        {isAiSpeaking ? "Skip & Rebut Now" : "Deliver Your Rebuttal"}
-                        <ArrowRight size={14} />
-                      </Button>
+                  <div className="flex flex-1 flex-col p-3 sm:p-4">
+                    <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted">
+                      <span className="flex items-center gap-1">
+                        <Mic size={11} />
+                        {activeTurnInfo.title}
+                      </span>
+                      {isUserTurn && (
+                        <span className="text-[11px] text-ink-soft">{activeTurnInfo.timeLimitSeconds}s target limit</span>
+                      )}
                     </div>
+                    <div className="max-h-[160px] min-h-[110px] overflow-y-auto scroll-smooth rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
+                      {isUserTurn ? (
+                        userSpeechPhase === "ready" ? (
+                          <span className="text-muted">
+                            Click &quot;Start Answering&quot; below to deliver your {activeTurnInfo.title.toLowerCase()}…
+                          </span>
+                        ) : (
+                          <>
+                            {userTypedTranscript}
+                            {userSpeechPhase === "speaking" && (
+                              <span className="animate-pulse font-mono font-bold text-teal">▍</span>
+                            )}
+                          </>
+                        )
+                      ) : (
+                        <span className="text-muted italic">
+                          {debateHistory.userRebuttal
+                            ? `Your rebuttal: "${debateHistory.userRebuttal.slice(0, 100)}…"`
+                            : debateHistory.userOpening
+                              ? `Your opening: "${debateHistory.userOpening.slice(0, 100)}…"`
+                              : "Listening to opponent…"}
+                        </span>
+                      )}
+                    </div>
+                    {isUserTurn && (
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        {userSpeechPhase === "ready" && (
+                          <Button size="sm" onClick={startUserSpeaking} className="bg-teal hover:bg-teal/90 text-white">
+                            <Mic size={14} />
+                            Start Answering ({activeTurnInfo.timeLimitSeconds}s)
+                          </Button>
+                        )}
+                        {userSpeechPhase === "speaking" && (
+                          <Button size="sm" variant="outline" onClick={finishUserSpeech}>
+                            End Response
+                          </Button>
+                        )}
+                        {userSpeechPhase === "finished" && (
+                          <Button size="sm" onClick={submitUserTurn} className="bg-teal hover:bg-teal/90 text-white">
+                            Submit Turn
+                            <ArrowRight size={14} />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* ─── RIGHT: AI OPPONENT ─── */}
+                <Card
+                  className={cn(
+                    "relative flex flex-col overflow-hidden transition-all duration-300",
+                    isAiTurn
+                      ? "border-lavender-strong shadow-soft-lg ring-2 ring-lavender-strong/30"
+                      : "border-line bg-paper/60 opacity-80",
                   )}
+                >
+                  <div className="flex items-center justify-between border-b border-line p-3 sm:px-4">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full text-white shadow-soft transition-colors",
+                          isAiTurn ? "bg-ink text-lavender" : "bg-ink/50",
+                        )}
+                      >
+                        <Bot size={15} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-ink">AI Opponent</p>
+                        <p className="text-[11px] text-ink-soft">
+                          Position: <span className="font-semibold text-amber-ink">{opponentPosition}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant={isAiTurn ? "lavender" : "outline"} size="sm">
+                      {isAiTurn ? (isAiSpeaking ? "Active · Countering" : "Finished Counter") : "Listening to You"}
+                    </Badge>
+                  </div>
+
+                  <div className="relative h-[230px] w-full overflow-hidden bg-gradient-to-br from-[#1a1714] via-[#221e19] to-[#12100d] p-4 text-white">
+                    <div className="flex h-full flex-col items-center justify-center gap-3">
+                      <div
+                        className={cn(
+                          "relative flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all",
+                          isAiTurn
+                            ? "border-lavender-strong bg-lavender/20 shadow-[0_0_24px_rgba(207,189,247,0.3)]"
+                            : "border-white/20 bg-white/5",
+                        )}
+                      >
+                        <Bot size={24} className={isAiTurn ? "text-lavender" : "text-white/60"} />
+                        {isAiTurn && isAiSpeaking && (
+                          <span className="absolute inset-0 animate-ping rounded-full border border-lavender-strong opacity-40" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {[4, 12, 20, 10, 16, 26, 14, 22, 8, 18, 12, 5].map((h, i) => (
+                          <motion.span
+                            key={i}
+                            className={cn("w-[3px] rounded-full", isAiTurn ? "bg-lavender-strong" : "bg-white/20")}
+                            animate={isAiTurn && isAiSpeaking ? { height: [4, h, 4] } : { height: 4 }}
+                            transition={{ duration: 0.5 + (i % 3) * 0.12, repeat: Infinity, ease: "easeInOut" }}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-white/70">
+                        {isAiTurn
+                          ? isAiSpeaking
+                            ? "Synthesizing adversarial pushback…"
+                            : "Counterargument delivered"
+                          : "Evaluating your argument…"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-1 flex-col p-3 sm:p-4">
+                    <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-muted">
+                      <span className="flex items-center gap-1">
+                        <ShieldAlert size={11} className="text-amber-ink" />
+                        AI Argument Output
+                      </span>
+                      {isAiTurn && (
+                        <span className="flex items-center gap-1 text-[11px] text-ink-soft">
+                          <Volume2 size={11} className="animate-pulse text-lavender-ink" />
+                          Live Voice
+                        </span>
+                      )}
+                    </div>
+                    <div className="max-h-[160px] min-h-[110px] overflow-y-auto scroll-smooth rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
+                      {isAiTurn ? (
+                        <>
+                          {aiTypedTranscript}
+                          {isAiSpeaking && (
+                            <span className="animate-pulse font-mono font-bold text-ink">▍</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted italic">
+                          {debateHistory.aiCounter1
+                            ? `Previous Counter: "${debateHistory.aiCounter1.slice(0, 110)}…"`
+                            : "AI is listening to your premise…"}
+                        </span>
+                      )}
+                    </div>
+                    {isAiTurn && (
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <Button size="sm" onClick={advanceFromAiTurn} className="bg-ink hover:bg-ink/90 text-white">
+                          {isAiSpeaking ? "Skip & Rebut Now" : "Deliver Your Rebuttal"}
+                          <ArrowRight size={14} />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Bottom Arena Director Bar */}
+              <Card className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:px-5">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" size="sm">{selectedLanguage}</Badge>
+                  <p className="text-xs font-medium text-ink-soft">
+                    Turn {activeTurnInfo.turnNumber} of 5:{" "}
+                    <span className="font-semibold text-ink">{activeTurnInfo.title}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={finishAndAnalyze} className="text-xs text-muted hover:text-ink">
+                    End Debate & View Report
+                  </Button>
                 </div>
               </Card>
             </div>
-
-            {/* Bottom Arena Director Bar */}
-            <Card className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:px-5">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" size="sm">
-                  {selectedLanguage}
-                </Badge>
-                <p className="text-xs font-medium text-ink-soft">
-                  Turn {activeTurnInfo.turnNumber} of 5:{" "}
-                  <span className="font-semibold text-ink">{activeTurnInfo.title}</span>
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" onClick={finishAndAnalyze} className="text-xs text-muted hover:text-ink">
-                  End Debate & View Report
-                </Button>
-              </div>
-            </Card>
           </motion.div>
         )}
 
@@ -988,8 +1154,8 @@ export default function DebateArenaPage() {
                 selectedLanguage === "Malayalam"
                   ? "Point: Opponent automation bias-നെ കുറിച്ചാണ് പറയുന്നത്. Refutation: പക്ഷെ modern CI pipeline-ൽ static security gates ഉള്ളതുകൊണ്ട് unvetted code production-ൽ എത്തില്ല. Turnaround: അതുകൊണ്ട് യഥാർത്ഥത്തിൽ AI velocity security standards ഉയർത്തുകയാണ് ചെയ്യുന്നത്."
                   : selectedLanguage === "Hindi"
-                  ? "Point: Opponent ka tarka hai automation bias. Refutation: Lekin automated security gates flawed code ko production se pehle hi block kar dete hain. Turnaround: Isliye AI velocity actually code quality ko enhance karti hai."
-                  : "Point: The opponent claims automation bias leads to unvetted bugs. Refutation: However, automated security linting catches structural flaws deterministically. Turnaround: Thus, AI accelerators actually enforce higher baseline code quality."
+                    ? "Point: Opponent ka tarka hai automation bias. Refutation: Lekin automated security gates flawed code ko production se pehle hi block kar dete hain. Turnaround: Isliye AI velocity actually code quality ko enhance karti hai."
+                    : "Point: The opponent claims automation bias leads to unvetted bugs. Refutation: However, automated security linting catches structural flaws deterministically. Turnaround: Thus, AI accelerators actually enforce higher baseline code quality."
               }
               onSubmit={() => setPageMode("challenge-analyzing")}
             />

@@ -8,6 +8,7 @@ import { Logo } from "./Logo";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { signOut } from "next-auth/react";
 import { clearAuth } from "@/lib/auth";
 import {
   LogOut,
@@ -57,9 +58,10 @@ export function Nav() {
     };
   }, [mobileMenuOpen]);
 
-  function logout() {
+  async function logout() {
     clearAuth();
     setMobileMenuOpen(false);
+    await signOut({ redirect: false });
     router.push("/");
   }
 

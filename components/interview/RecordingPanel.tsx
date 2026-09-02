@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import type { RoundQuestion } from "@/lib/types";
 
+
 export function RecordingPanel({
   question,
   transcript,
@@ -20,10 +21,12 @@ export function RecordingPanel({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement>(null);
   const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
   const [phase, setPhase] = useState<"ready" | "recording" | "recorded">("ready");
   const [typedTranscript, setTypedTranscript] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(question.timeLimitSeconds ?? 0);
+
 
   // Camera: async init with video + audio, attach to video element, stop tracks on unmount.
   useEffect(() => {
@@ -95,6 +98,14 @@ export function RecordingPanel({
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
+
+  // Auto-scroll transcript to bottom as new text types in
+  useEffect(() => {
+    if (transcriptScrollRef.current) {
+      transcriptScrollRef.current.scrollTop = transcriptScrollRef.current.scrollHeight;
+    }
+  }, [typedTranscript]);
+
 
   function startRecording() {
     setPhase("recording");
@@ -208,7 +219,10 @@ export function RecordingPanel({
             <Mic size={12} />
             Response
           </div>
-          <p className="min-h-[56px] text-sm leading-relaxed text-ink-soft sm:min-h-[64px]">
+          <div
+            ref={transcriptScrollRef}
+            className="max-h-[140px] min-h-[56px] overflow-y-auto scroll-smooth text-sm leading-relaxed text-ink-soft sm:max-h-[180px] sm:min-h-[64px]"
+          >
             {phase === "ready" ? (
               <span className="text-muted">Your response will appear here as you speak…</span>
             ) : (
@@ -217,7 +231,7 @@ export function RecordingPanel({
                 {phase === "recording" && <span className="animate-pulse-soft">▍</span>}
               </>
             )}
-          </p>
+          </div>
         </div>
 
         <div className="mt-4 flex justify-end sm:mt-5">
