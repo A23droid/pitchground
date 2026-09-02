@@ -1,17 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
+import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
 import { saveAuth, nameFromEmail } from "@/lib/auth";
 import { ArrowRight, Mail, Lock } from "lucide-react";
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const googleError = searchParams.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -50,20 +61,27 @@ export default function LoginPage() {
           <h1 className="font-display text-2xl text-ink">Welcome back</h1>
           <p className="mt-1 text-sm text-ink-soft">Log in to pick up your training where you left off.</p>
 
-          {/* Demo login */}
+          {googleError ? (
+            <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
+              Google sign-in failed. In Google Cloud, add this exact redirect URI:
+              <span className="mt-1 block font-mono">http://localhost:3000/api/auth/callback/google</span>
+            </p>
+          ) : null}
+
+          <GoogleSignInButton callbackUrl="/dashboard" />
+
           <button
             type="button"
             onClick={onDemoLogin}
             disabled={demoLoading}
-            className="mt-5 w-full rounded-xl border border-dashed border-lavender-ink/40 bg-lavender/40 px-4 py-3 text-sm font-medium text-lavender-ink transition-all duration-200 hover:bg-lavender/70 disabled:opacity-60"
+            className="mt-3 w-full rounded-xl border border-dashed border-lavender-ink/40 bg-lavender/40 px-4 py-3 text-sm font-medium text-lavender-ink transition-all duration-200 hover:bg-lavender/70 disabled:opacity-60"
           >
             {demoLoading ? "Loading demo…" : "✦ Try demo — no account needed"}
           </button>
 
-          {/* Divider */}
           <div className="my-5 flex items-center gap-3">
             <div className="h-px flex-1 bg-line" />
-            <span className="text-xs text-muted">or sign in</span>
+            <span className="text-xs text-muted">or sign in with email</span>
             <div className="h-px flex-1 bg-line" />
           </div>
 

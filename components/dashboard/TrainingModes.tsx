@@ -45,7 +45,7 @@ const modes = [
 
 export function TrainingModes() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 hidden md:grid md:grid-cols-2 lg:grid-cols-3">
       {modes.map((m, i) => (
         <motion.div
           key={m.href}

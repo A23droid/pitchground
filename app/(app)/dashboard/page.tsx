@@ -38,19 +38,11 @@ export default function DashboardPage() {
               <DashboardHero profile={profile} />
             </FadeIn>
             <FadeIn>
-              <TrainingModes />
-            </FadeIn>
-            <FadeIn>
               <RecommendedNext profile={profile} />
             </FadeIn>
-            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <FadeIn>
-                <ProgressChart data={profile.progress} />
-              </FadeIn>
-              <FadeIn>
-                <RecentSessions sessions={sessions} />
-              </FadeIn>
-            </div>
+            <FadeIn>
+              <ProgressChart data={profile.progress} />
+            </FadeIn>
             <FadeIn>
               <StrengthsWeaknesses strengths={profile.strengths} weaknesses={profile.weaknesses} />
             </FadeIn>

@@ -25,7 +25,7 @@ export function LanguageTeaser() {
     >
       <Card className="overflow-hidden p-0">
         <div className="grid gap-0 lg:grid-cols-2">
-          <div className="border-b border-line p-8 lg:border-b-0 lg:border-r">
+          <div className="border-b border-line p-6 sm:p-8 lg:border-b-0 lg:border-r">
             <Badge variant="lavender" size="sm" className="mb-3">
               <Languages size={12} />
               Malayalam attempt
@@ -34,7 +34,7 @@ export function LanguageTeaser() {
               <Row key={r.label} {...r} tone="bg-teal" />
             ))}
           </div>
-          <div className="p-8">
+          <div className="p-6 sm:p-8">
             <Badge variant="rose" size="sm" className="mb-3">
               <Languages size={12} />
               English attempt
@@ -44,7 +44,7 @@ export function LanguageTeaser() {
             ))}
           </div>
         </div>
-        <div className="border-t border-line bg-paper px-8 py-5">
+        <div className="border-t border-line bg-paper px-6 py-5 sm:px-8">
           <p className="text-sm text-ink-soft">
             Concept understanding barely moves. Communication drops 33 points. Pitchground recommends practicing
             <span className="font-medium text-ink"> professional English articulation</span> — not another DBMS

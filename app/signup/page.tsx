@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
+import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
 import { saveAuth } from "@/lib/auth";
 import { ArrowRight, Mail, Lock, User } from "lucide-react";
 
@@ -42,7 +43,15 @@ export default function SignupPage() {
           <h1 className="font-display text-2xl text-ink">Create your account</h1>
           <p className="mt-1 text-sm text-ink-soft">Pitchground starts building your communication profile from session one.</p>
 
-          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
+          <GoogleSignInButton callbackUrl="/start" />
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-line" />
+            <span className="text-xs text-muted">or create with email</span>
+            <div className="h-px flex-1 bg-line" />
+          </div>
+
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <Field label="Name" icon={<User size={14} />}>
               <input
                 type="text"

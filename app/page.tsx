@@ -18,7 +18,7 @@ export default function LandingPage() {
       <LandingNav />
 
       {/* Hero */}
-      <section className="relative isolate mx-auto flex min-h-[96vh] w-full max-w-7xl flex-col items-center justify-start px-4 pb-48 pt-20 text-center sm:px-6">
+      <section className="relative isolate mx-auto flex min-h-[96vh] w-full max-w-7xl flex-col items-center justify-start px-4 pb-32 pt-12 text-center sm:px-6 sm:pb-48 sm:pt-20">
         {/* Wispr Flow text-on-path flowing animation layer */}
         <div className="pointer-events-none absolute inset-0 z-0 flex items-end justify-center overflow-visible pb-6">
           <WisprHeroAnimation
@@ -43,7 +43,7 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.65, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10 font-display text-[3.1rem] leading-[1.04] tracking-tight text-ink sm:text-[4.6rem]"
+          className="relative z-10 font-display text-4xl leading-[1.04] tracking-tight text-ink sm:text-[3.1rem] md:text-[4.6rem]"
         >
           Find where your
           <br />
@@ -107,7 +107,7 @@ export default function LandingPage() {
       </section>
 
       {/* Language */}
-      <section id="language" className="mx-auto w-full max-w-4xl px-4 pb-28 sm:px-6">
+      <section id="language" className="mx-auto w-full max-w-4xl px-4 pb-28 sm:px-6 hidden md:block">
         <SectionHeading
           eyebrow="Multilingual by design"
           title="Knowledge gap, or English articulation gap?"
@@ -121,7 +121,7 @@ export default function LandingPage() {
 
       {/* Hardware role */}
       <section className="mx-auto w-full max-w-5xl px-4 pb-28 sm:px-6">
-        <div className="grid gap-5 rounded-[28px] border border-line bg-paper-raised p-8 shadow-soft sm:grid-cols-2 sm:p-12">
+        <div className="grid gap-4 rounded-[28px] border border-line bg-paper-raised p-6 shadow-soft sm:grid-cols-2 sm:gap-5 sm:p-12">
           <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-soft">
               <Smartphone size={18} className="text-teal-ink" />

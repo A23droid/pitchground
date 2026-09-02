@@ -34,7 +34,7 @@ const signals = [
 
 export function SignalsGrid() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
       {signals.map((s, i) => (
         <motion.div
           key={s.title}
@@ -43,7 +43,7 @@ export function SignalsGrid() {
           viewport={{ once: true, margin: "-40px" }}
           transition={{ delay: i * 0.07, duration: 0.45 }}
         >
-          <Card className="h-full p-5">
+          <Card className="h-full p-4 sm:p-5">
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-lavender">
               <s.icon size={16} className="text-lavender-ink" />
             </div>
