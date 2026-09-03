@@ -7,6 +7,7 @@ import { Logo } from "@/components/shared/Logo";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { WisprHeroAnimation } from "@/components/landing/WisprHeroAnimation";
+import { WisprHeroAnimationMobile } from "@/components/landing/WisprHeroAnimationMobile";
 import { LoopStepper } from "@/components/landing/LoopStepper";
 import { SignalsGrid } from "@/components/landing/SignalsGrid";
 import { LanguageTeaser } from "@/components/landing/LanguageTeaser";
@@ -20,7 +21,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="relative isolate mx-auto flex min-h-[96vh] w-full max-w-7xl flex-col items-center justify-start px-4 pb-32 pt-12 text-center sm:px-6 sm:pb-48 sm:pt-20">
         {/* Wispr Flow text-on-path flowing animation layer */}
-        <div className="pointer-events-none absolute inset-0 z-0 flex items-end justify-center overflow-visible pb-6">
+        <div className="pointer-events-none absolute inset-0 z-0 hidden sm:flex items-end justify-center overflow-visible pb-6">
           <WisprHeroAnimation
             className="w-full max-w-[1600px]"
             rawText="so can you check in with them and see if the notes from yesterday's meeting were sent out, or if they're still waiting on the review and can you ask if we need to reschedule the demo for next week... "
@@ -79,6 +80,20 @@ export default function LandingPage() {
           </Link>
         </motion.div>
 
+        {/* Mobile Animation (In normal flow) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="relative z-0 mt-36 flex w-full flex-1 flex-col items-center justify-start sm:hidden px-2"
+        >
+          <WisprHeroAnimationMobile
+            className="w-full max-w-sm mx-auto"
+            rawText="so can you check in with them and see if the notes from yesterday's meeting were sent out, or if they're still waiting on the review and can you ask if we need to reschedule the demo for next week... "
+            polishedText="has been a bit chaotic. It feels like nobody really knows what's going on. Can you check in with them and see if the notes from yesterday's meeting were sent out? "
+          />
+        </motion.div>
+
         {/* <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -90,7 +105,7 @@ export default function LandingPage() {
       </section>
 
       {/* How it works */}
-      <section id="how-it-works" className="mx-auto w-full max-w-5xl px-4 pb-28 pt-8 sm:px-6">
+      <section id="how-it-works" className="hidden sm:block mx-auto w-full max-w-5xl px-4 pb-28 pt-8 sm:px-6">
         <SectionHeading eyebrow="The loop" title="Every attempt trains the next one." />
         <p className="mx-auto -mt-8 mb-10 max-w-xl text-center text-[15px] text-ink-soft">
           Generic AI coaches score you and stop. Pitchground treats each response as evidence for what to try next.

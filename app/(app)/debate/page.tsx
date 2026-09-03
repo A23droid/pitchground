@@ -735,7 +735,7 @@ export default function DebateArenaPage() {
                 {/* You */}
                 <div className="rounded-xl border border-line bg-paper-raised p-3">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-ink">You</p>
-                  <p className="min-h-[40px] text-xs leading-relaxed text-ink">
+                  <p className="max-h-[80px] min-h-[40px] overflow-y-auto scroll-smooth text-xs leading-relaxed text-ink">
                     {isUserTurn ? (
                       userSpeechPhase === "ready" ? (
                         <span className="italic text-muted">Tap &quot;Start Speaking&quot; below…</span>
@@ -760,7 +760,7 @@ export default function DebateArenaPage() {
                 {/* AI */}
                 <div className="rounded-xl border border-line bg-paper-raised p-3">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-lavender-ink">AI</p>
-                  <p className="min-h-[40px] text-xs leading-relaxed text-ink">
+                  <p className="max-h-[80px] min-h-[40px] overflow-y-auto scroll-smooth text-xs leading-relaxed text-ink">
                     {isAiTurn ? (
                       <>
                         {aiTypedTranscript}

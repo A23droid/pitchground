@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,12 +24,34 @@ export function AnalyzingState({ stages, onDone }: { stages: readonly string[]; 
   }, [activeIndex]);
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-8 py-16 text-center">
-      <div className="relative flex h-16 w-16 items-center justify-center">
-        <span className="absolute inset-0 animate-ping rounded-full bg-lavender opacity-40" />
-        <span className="relative flex h-16 w-16 items-center justify-center rounded-full bg-lavender">
-          <Loader2 className="h-6 w-6 animate-spin text-lavender-ink" strokeWidth={2.2} />
-        </span>
+    <div className="mx-auto flex w-full max-w-md flex-col items-center justify-center gap-10 py-16 text-center min-h-[50vh] sm:min-h-0">
+      <div className="relative flex h-24 w-24 items-center justify-center">
+        {/* Expanding rings */}
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className="absolute inset-0 rounded-full border-[1.5px] border-lavender-ink"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{
+              scale: [0.8, 2],
+              opacity: [0.6, 0],
+            }}
+            transition={{
+              duration: 2.4,
+              repeat: Infinity,
+              delay: i * 0.8,
+              ease: "easeOut",
+            }}
+          />
+        ))}
+        {/* Center core */}
+        <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-teal backdrop-blur-sm">
+          <motion.div
+            className="h-3 w-3 rounded-full bg-[#e3d6f8]"
+            animate={{ scale: [0.85, 1.15, 0.85] }}
+            transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
       </div>
 
       <div className="flex w-full flex-col gap-2.5">
