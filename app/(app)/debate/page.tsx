@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ChipGroup, OptionGrid } from "@/components/shared/OptionGrid";
+import { Select } from "@/components/ui/Select";
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
 import { DebateReportPanel } from "@/components/debate/DebateReportPanel";
 import { RecordingPanel } from "@/components/interview/RecordingPanel";
@@ -139,7 +140,8 @@ export default function DebateArenaPage() {
   }>({});
 
   // Camera & Media stream
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const mobileVideoRef = useRef<HTMLVideoElement>(null);
+  const desktopVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
 
@@ -174,8 +176,11 @@ export default function DebateArenaPage() {
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+        if (mobileVideoRef.current) {
+          mobileVideoRef.current.srcObject = stream;
+        }
+        if (desktopVideoRef.current) {
+          desktopVideoRef.current.srcObject = stream;
         }
         setCameraState("live");
       } catch {
@@ -198,8 +203,13 @@ export default function DebateArenaPage() {
 
   // Guard against video element ref assignment race
   useEffect(() => {
-    if (cameraState === "live" && streamRef.current && videoRef.current && !videoRef.current.srcObject) {
-      videoRef.current.srcObject = streamRef.current;
+    if (cameraState === "live" && streamRef.current) {
+      if (mobileVideoRef.current && !mobileVideoRef.current.srcObject) {
+        mobileVideoRef.current.srcObject = streamRef.current;
+      }
+      if (desktopVideoRef.current && !desktopVideoRef.current.srcObject) {
+        desktopVideoRef.current.srcObject = streamRef.current;
+      }
     }
   }, [cameraState, pageMode]);
 
@@ -495,20 +505,19 @@ export default function DebateArenaPage() {
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Language</h2>
-                <OptionGrid
+                <Select
                   options={languages.map((l) => ({ value: l.value, label: l.value, description: l.description }))}
                   value={selectedLanguage}
-                  onChange={setSelectedLanguage}
-                  columns={2}
+                  onChange={(e) => setSelectedLanguage(e.target.value as Language)}
                 />
               </div>
 
               <div>
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Difficulty</h2>
-                <ChipGroup
-                  options={difficulties.map((d) => d.value)}
+                <Select
+                  options={difficulties.map((d) => ({ value: d.value, label: d.value }))}
                   value={selectedDifficulty}
-                  onChange={setSelectedDifficulty}
+                  onChange={(e) => setSelectedDifficulty(e.target.value as Difficulty)}
                 />
                 <p className="mt-2 text-xs text-muted">
                   {difficulties.find((d) => d.value === selectedDifficulty)?.description}
@@ -649,7 +658,7 @@ export default function DebateArenaPage() {
                 {/* User Camera */}
                 <div className="relative aspect-[4/3] w-full bg-gradient-to-br from-teal to-[#091b18]">
                   <video
-                    ref={videoRef}
+                    ref={mobileVideoRef}
                     autoPlay
                     muted
                     playsInline
@@ -862,7 +871,7 @@ export default function DebateArenaPage() {
 
                   <div className="relative h-[230px] w-full overflow-hidden bg-teal">
                     <video
-                      ref={videoRef}
+                      ref={desktopVideoRef}
                       autoPlay
                       muted
                       playsInline

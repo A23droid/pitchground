@@ -40,9 +40,9 @@ export default function DashboardPage() {
             <FadeIn>
               <RecommendedNext profile={profile} />
             </FadeIn>
-            <FadeIn>
+            {/* <FadeIn>
               <ProgressChart data={profile.progress} />
-            </FadeIn>
+            </FadeIn> */}
             <FadeIn>
               <StrengthsWeaknesses strengths={profile.strengths} weaknesses={profile.weaknesses} />
             </FadeIn>

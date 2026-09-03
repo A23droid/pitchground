@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ChipGroup, OptionGrid } from "@/components/shared/OptionGrid";
+import { Select } from "@/components/ui/Select";
 import { RecordingPanel } from "@/components/interview/RecordingPanel";
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
 import { PrepCountdown } from "@/components/impromptu/PrepCountdown";
@@ -145,7 +146,7 @@ export default function ImpromptuPage() {
   return (
     <div className="mx-auto mt-6 w-full max-w-4xl px-4 pb-24 sm:mt-8 sm:px-6">
       {/* Breadcrumb Header */}
-      <div className="mb-4 flex items-center justify-between">
+      {/* <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2 overflow-hidden">
           <Link
             href="/dashboard"
@@ -165,7 +166,7 @@ export default function ImpromptuPage() {
             {config.durationSeconds}s Drill
           </Badge>
         )}
-      </div>
+      </div> */}
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -179,10 +180,10 @@ export default function ImpromptuPage() {
           {stage === "setup" && (
             <div className="flex flex-col gap-6">
               <div>
-                <Badge variant="lavender" size="sm" className="mb-3">
+                {/* <Badge variant="lavender" size="sm" className="mb-3">
                   <Zap size={12} />
                   Spontaneous Thinking
-                </Badge>
+                </Badge> */}
                 <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">
                   Impromptu Speaking Mode
                 </h1>
@@ -287,20 +288,19 @@ export default function ImpromptuPage() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
                   <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Language</h2>
-                  <OptionGrid
+                  <Select
                     options={languages.map((l) => ({ value: l.value, label: l.value, description: l.description }))}
                     value={selectedLanguage}
-                    onChange={setSelectedLanguage}
-                    columns={2}
+                    onChange={(e) => setSelectedLanguage(e.target.value as Language)}
                   />
                 </div>
 
                 <div>
                   <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Difficulty</h2>
-                  <ChipGroup
-                    options={difficulties.map((d) => d.value)}
+                  <Select
+                    options={difficulties.map((d) => ({ value: d.value, label: d.value }))}
                     value={selectedDifficulty}
-                    onChange={setSelectedDifficulty}
+                    onChange={(e) => setSelectedDifficulty(e.target.value as Difficulty)}
                   />
                   <p className="mt-2 text-xs text-muted">
                     {difficulties.find((d) => d.value === selectedDifficulty)?.description}

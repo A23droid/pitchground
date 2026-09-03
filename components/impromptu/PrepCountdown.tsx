@@ -28,10 +28,10 @@ export function PrepCountdown({
 
   return (
     <Card className="relative mx-auto max-w-2xl overflow-hidden p-8 text-center sm:p-10">
-      <Badge variant="lavender" size="sm" className="mx-auto mb-3">
+      {/* <Badge variant="lavender" size="sm" className="mx-auto mb-3">
         <Timer size={12} />
         Preparation Phase
-      </Badge>
+      </Badge> */}
 
       <h1 className="font-display text-2xl font-semibold text-ink sm:text-3xl">
         &quot;{config.topic.prompt}&quot;

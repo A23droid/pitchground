@@ -141,3 +141,36 @@ body {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* ── Themed scrollbar ─────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--paper);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* ── Themed <select> option list ──────────────────── */
+select {
+  color-scheme: light;
+  background-color: var(--paper-raised);
+  color: var(--ink);
+}
+select option {
+  background-color: var(--paper-raised);
+  color: var(--ink);
+  padding: 8px 12px;
+}
+select option:checked,
+select option:hover {
+  background-color: var(--lavender);
+  color: var(--lavender-ink);
+}

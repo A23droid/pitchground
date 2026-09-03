@@ -59,7 +59,7 @@ export function ImpromptuReportPanel({
             </p>
           </div>
 
-          <div className="text-right">
+          <div className="mt-4 sm:mt-0 sm:text-right w-full sm:w-auto border-t border-line pt-4 sm:border-0 sm:pt-0">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted">Overall Fluency</p>
             <p className="font-display text-3xl font-bold text-ink sm:text-4xl">
               {analysis.overallScore}
@@ -82,11 +82,11 @@ export function ImpromptuReportPanel({
           </div>
 
           {/* Step Timeline Bars */}
-          <div className="grid grid-cols-6 gap-2">
+          <div className="flex w-full gap-3 overflow-x-auto pb-4 sm:grid sm:grid-cols-6 sm:gap-2 sm:overflow-visible sm:pb-0">
             {analysis.fluencyTimeline.map((pt, i) => {
               const isDecaying = pt.repetitionCount > 2;
               return (
-                <div key={i} className="flex flex-col items-center gap-1">
+                <div key={i} className="flex min-w-[64px] flex-col items-center gap-1 sm:min-w-0">
                   <div className="flex h-20 w-full items-end justify-center rounded-lg bg-paper-raised p-1">
                     <div
                       className={`w-full rounded-md transition-all ${
@@ -182,9 +182,9 @@ export function ImpromptuReportPanel({
       </div>
 
       <div className="flex justify-end gap-3 pb-8">
-        <Button size="lg" variant="outline" onClick={onDone}>
+        {/* <Button size="lg" variant="outline" onClick={onDone}>
           Back to Dashboard
-        </Button>
+        </Button> */}
       </div>
     </div>
   );

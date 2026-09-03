@@ -25,9 +25,9 @@ import {
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/start", label: "Interview", icon: Mic },
-  { href: "/debate", label: "Debate", icon: Swords, badge: "Arena" },
-  { href: "/impromptu", label: "Impromptu", icon: Zap, badge: "Fluency" },
+  { href: "/interview", label: "Interview", icon: Mic },
+  { href: "/debate", label: "Debate", icon: Swords },
+  { href: "/impromptu", label: "Impromptu", icon: Zap },
   { href: "/language-diagnostic", label: "Language", icon: Languages },
   { href: "/profile", label: "Profile", icon: User },
 ];
@@ -184,17 +184,7 @@ export function Nav() {
                         </div>
                         <span>{link.label}</span>
                       </div>
-                      {link.badge ? (
-                        <Badge
-                          variant={isActive ? "dark" : "outline"}
-                          size="sm"
-                          className={cn("text-[10px]", isActive && "bg-white/20 text-white")}
-                        >
-                          {link.badge}
-                        </Badge>
-                      ) : (
-                        <ArrowRight size={14} className={isActive ? "text-white/70" : "text-muted/60"} />
-                      )}
+                      <ArrowRight size={14} className={isActive ? "text-white/70" : "text-muted/60"} />
                     </Link>
                   );
                 })}

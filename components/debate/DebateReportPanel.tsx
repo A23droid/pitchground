@@ -143,11 +143,11 @@ export function DebateReportPanel({
         <ChallengePanel challenge={challenge} onPractice={onStartChallenge} />
       </div>
 
-      <div className="flex justify-end gap-3 pb-8">
+      {/* <div className="flex justify-end gap-3 pb-8">
         <Button size="lg" variant="outline" onClick={onDone}>
           Back to Dashboard
         </Button>
-      </div>
+      </div> */}
     </div>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
 import { StageProgress, type LoopStep } from "@/components/interview/StageProgress";
 import { RecordingPanel } from "@/components/interview/RecordingPanel";
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
@@ -20,6 +20,7 @@ import { buildBaselineQuestion, buildPressureQuestion } from "@/mock/questions";
 import { analyzeAttempt, ANALYSIS_STAGES, diagnose, DIAGNOSIS_STAGES, compareImprovement } from "@/services/analysisService";
 import { requestChallenge, requestReplay } from "@/services/challengeService";
 import { saveCompletedSession } from "@/services/learnerService";
+import { topics, audiences, languages, difficulties } from "@/mock/scenarios";
 
 import type {
   Audience,
@@ -36,6 +37,7 @@ import type {
 import { ArrowRight, Mic, Video } from "lucide-react";
 
 type Stage =
+  | "setup"
   | "intro"
   | "baseline-question"
   | "baseline-analyzing"
@@ -53,7 +55,8 @@ type Stage =
   | "improvement"
   | "done";
 
-const stageToStep: Record<Stage, LoopStep> = {
+const stageToStep: Record<Stage, LoopStep | null> = {
+  setup: null,
   intro: "Speak",
   "baseline-question": "Speak",
   "baseline-analyzing": "Analyze",
@@ -74,20 +77,25 @@ const stageToStep: Record<Stage, LoopStep> = {
 
 export function InterviewFlow() {
   const router = useRouter();
-  const params = useSearchParams();
+
+  // Config state — filled in the setup screen
+  const [topic, setTopic] = useState(topics[0]);
+  const [audience, setAudience] = useState<Audience>("Technical interviewer");
+  const [language, setLanguage] = useState<Language>("English");
+  const [difficulty, setDifficulty] = useState<Difficulty>("Standard");
 
   const config: ScenarioConfig = {
     interviewType: "Technical Interview",
-    topic: params.get("topic") || "Database Systems",
-    audience: (params.get("audience") as Audience) || "Technical interviewer",
-    language: (params.get("language") as Language) || "English",
-    difficulty: (params.get("difficulty") as Difficulty) || "Standard",
+    topic,
+    audience,
+    language,
+    difficulty,
   };
 
-  const [stage, setStage] = useState<Stage>("intro");
+  const [stage, setStage] = useState<Stage>("setup");
   const [baselineAnalysis, setBaselineAnalysis] = useState<AttemptAnalysis | null>(null);
   const [pressureAnalysis, setPressureAnalysis] = useState<AttemptAnalysis | null>(null);
-  const [retryAnalysis, setRetryAnalysis] = useState<AttemptAnalysis | null>(null);
+  const [retryAnalysis, setRetryAnalysis]  = useState<AttemptAnalysis | null>(null);
   const [diagnosisResult, setDiagnosisResult] = useState<FailureDiagnosis | null>(null);
   const [challenge, setChallenge] = useState<TargetedChallenge | null>(null);
   const [replayConditions, setReplayConditions] = useState<ReplayConditions | null>(null);
@@ -153,24 +161,15 @@ export function InterviewFlow() {
   return (
     <>
       <div className="mx-auto mt-6 w-full max-w-4xl px-4 sm:mt-8 sm:px-6">
-        {/* Row 1: back link + config summary */}
-        <div className="mb-3 flex items-center gap-2 overflow-hidden">
-          <Link
-            href="/start"
-            className="shrink-0 text-xs font-medium text-muted transition-colors hover:text-ink"
-          >
-            ← Setup
-          </Link>
-          <span className="text-muted/40">·</span>
-          <p className="truncate text-xs font-medium text-muted">
-            {config.topic} · {config.audience} · {config.language} · {config.difficulty}
-          </p>
-        </div>
-
-        {/* Row 2: stage progress — scrollable on mobile */}
-        <div className="mb-5 overflow-x-auto">
-          <StageProgress current={stageToStep[stage]} />
-        </div>
+        {/* Badge — hidden on setup screen */}
+        {stageToStep[stage] && (
+          <div className="mb-5">
+            <Badge variant="dark" size="sm">
+              <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-teal" />
+              {stageToStep[stage]}
+            </Badge>
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -180,6 +179,16 @@ export function InterviewFlow() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           >
+            {stage === "setup" && (
+              <SetupCard
+                topic={topic} setTopic={setTopic}
+                audience={audience} setAudience={setAudience}
+                language={language} setLanguage={setLanguage}
+                difficulty={difficulty} setDifficulty={setDifficulty}
+                onBegin={() => setStage("intro")}
+              />
+            )}
+
             {stage === "intro" && <IntroCard config={config} onStart={() => setStage("baseline-question")} />}
 
             {stage === "baseline-question" && (
@@ -272,6 +281,82 @@ export function InterviewFlow() {
         </AnimatePresence>
       </div>
     </>
+  );
+}
+
+function SetupCard({
+  topic, setTopic,
+  audience, setAudience,
+  language, setLanguage,
+  difficulty, setDifficulty,
+  onBegin,
+}: {
+  topic: string; setTopic: (v: string) => void;
+  audience: Audience; setAudience: (v: Audience) => void;
+  language: Language; setLanguage: (v: Language) => void;
+  difficulty: Difficulty; setDifficulty: (v: Difficulty) => void;
+  onBegin: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="font-display text-3xl tracking-tight text-ink sm:text-4xl">Set up your interview</h1>
+        <p className="mt-2 text-[15px] text-ink-soft">
+          Pitchground will start with a baseline question, then introduce a pressure round to find where your communication breaks down.
+        </p>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Topic</h2>
+          <Select
+            options={topics.map((t) => ({ label: t, value: t }))}
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+          />
+        </div>
+        <div>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Audience</h2>
+          <Select
+            options={audiences.map((a) => ({ label: a.value, value: a.value }))}
+            value={audience}
+            onChange={(e) => setAudience(e.target.value as Audience)}
+          />
+        </div>
+        <div>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Language</h2>
+          <Select
+            options={languages.map((l) => ({ label: l.value, value: l.value }))}
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+          />
+        </div>
+        <div>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Difficulty</h2>
+          <Select
+            options={difficulties.map((d) => ({ label: d.value, value: d.value }))}
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+          />
+          <p className="mt-1.5 text-xs text-muted">
+            {difficulties.find((d) => d.value === difficulty)?.description}
+          </p>
+        </div>
+      </div>
+
+      <div className="sticky bottom-6">
+        <Card className="flex items-center justify-between gap-4 p-4 pl-5 shadow-soft-lg">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink">{topic}</p>
+            <p className="truncate text-xs text-ink-soft">{audience} · {language} · {difficulty}</p>
+          </div>
+          <Button size="lg" onClick={onBegin} className="shrink-0">
+            Begin interview
+            <ArrowRight size={16} />
+          </Button>
+        </Card>
+      </div>
+    </div>
   );
 }
 
