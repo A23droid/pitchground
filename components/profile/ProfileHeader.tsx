@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/Badge";
 import type { LearnerProfile } from "@/lib/types";
 
 export function ProfileHeader({ profile }: { profile: LearnerProfile }) {
@@ -23,9 +22,7 @@ export function ProfileHeader({ profile }: { profile: LearnerProfile }) {
           </p>
         </div>
       </div>
-      <Badge variant="dark" size="md">
-        Adaptive profile — updates every session
-      </Badge>
+
     </motion.div>
   );
 }

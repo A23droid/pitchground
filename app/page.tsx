@@ -122,12 +122,12 @@ export default function LandingPage() {
       </section>
 
       {/* Language */}
-      <section id="language" className="mx-auto w-full max-w-4xl px-4 pb-28 sm:px-6 hidden md:block">
+      <section id="language" className="mx-auto w-full max-w-3xl px-4 pb-24 sm:px-6 hidden md:block">
         <SectionHeading
           eyebrow="Multilingual by design"
           title="Knowledge gap, or English articulation gap?"
         />
-        <p className="mx-auto -mt-8 mb-10 max-w-xl text-center text-[15px] text-ink-soft">
+        <p className="mx-auto -mt-6 mb-8 max-w-lg text-center text-[15px] text-ink-soft">
           Explain a concept comfortably, then again in English. Pitchground separates what you know from how well
           you can say it in the language your interview needs.
         </p>

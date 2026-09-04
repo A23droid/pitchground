@@ -143,6 +143,8 @@ export default function DebateArenaPage() {
   const mobileVideoRef = useRef<HTMLVideoElement>(null);
   const desktopVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mobileUserTranscriptRef = useRef<HTMLParagraphElement>(null);
+  const mobileAiTranscriptRef = useRef<HTMLParagraphElement>(null);
   const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
 
   // Evaluation results
@@ -162,6 +164,19 @@ export default function DebateArenaPage() {
   const activeTurnInfo = TURN_CONFIG[currentTurn];
   const isUserTurn = activeTurnInfo.speaker === "user";
   const isAiTurn = activeTurnInfo.speaker === "ai";
+
+  // Auto-scroll mobile transcript boxes to the bottom on new content
+  useEffect(() => {
+    if (mobileUserTranscriptRef.current) {
+      mobileUserTranscriptRef.current.scrollTop = mobileUserTranscriptRef.current.scrollHeight;
+    }
+  }, [userTypedTranscript]);
+
+  useEffect(() => {
+    if (mobileAiTranscriptRef.current) {
+      mobileAiTranscriptRef.current.scrollTop = mobileAiTranscriptRef.current.scrollHeight;
+    }
+  }, [aiTypedTranscript]);
 
   // Camera Initialization when entering arena
   useEffect(() => {
@@ -188,7 +203,7 @@ export default function DebateArenaPage() {
       }
     };
 
-    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+    if (typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function") {
       startCamera();
     } else {
       setCameraState("unavailable");
@@ -735,7 +750,7 @@ export default function DebateArenaPage() {
                 {/* You */}
                 <div className="rounded-xl border border-line bg-paper-raised p-3">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-ink">You</p>
-                  <p className="max-h-[80px] min-h-[40px] overflow-y-auto scroll-smooth text-xs leading-relaxed text-ink">
+                  <p ref={mobileUserTranscriptRef} className="max-h-[140px] min-h-[40px] overflow-y-auto scroll-smooth text-xs leading-relaxed text-ink">
                     {isUserTurn ? (
                       userSpeechPhase === "ready" ? (
                         <span className="italic text-muted">Tap &quot;Start Speaking&quot; below…</span>
@@ -760,7 +775,7 @@ export default function DebateArenaPage() {
                 {/* AI */}
                 <div className="rounded-xl border border-line bg-paper-raised p-3">
                   <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-lavender-ink">AI</p>
-                  <p className="max-h-[80px] min-h-[40px] overflow-y-auto scroll-smooth text-xs leading-relaxed text-ink">
+                  <p ref={mobileAiTranscriptRef} className="max-h-[140px] min-h-[40px] overflow-y-auto scroll-smooth text-xs leading-relaxed text-ink">
                     {isAiTurn ? (
                       <>
                         {aiTypedTranscript}

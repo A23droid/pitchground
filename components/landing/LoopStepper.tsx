@@ -8,7 +8,7 @@ const steps = ["Observe", "Compare", "Diagnose", "Remember", "Target", "Recreate
 export function LoopStepper() {
   return (
     <div className="relative w-full -mx-4 sm:mx-0 px-4 sm:px-0">
-      <div className="flex w-full overflow-x-auto pb-6 sm:pb-0 hide-scrollbar snap-x snap-mandatory sm:flex-wrap items-center justify-start sm:justify-center gap-3 sm:gap-2">
+      <div className="flex w-full overflow-x-auto pb-6 sm:pb-0 hide-scrollbar snap-x snap-mandatory sm:flex-wrap lg:flex-nowrap items-center justify-start sm:justify-center lg:justify-center gap-2 sm:gap-2">
         {steps.map((step, i) => (
           <motion.div
             key={step}
@@ -21,8 +21,8 @@ export function LoopStepper() {
             <span
               className={
                 i === 0 || i === steps.length - 1
-                  ? "rounded-full bg-teal px-5 sm:px-4 py-2 text-[15px] sm:text-sm font-semibold text-white shadow-sm"
-                  : "rounded-full border border-line-strong bg-paper-raised px-5 sm:px-4 py-2 text-[15px] sm:text-sm font-medium text-ink shadow-sm"
+                  ? "rounded-full bg-teal px-4 sm:px-3 lg:px-3.5 py-1.5 text-[15px] sm:text-sm lg:text-[13px] font-semibold text-white shadow-sm whitespace-nowrap"
+                  : "rounded-full border border-line-strong bg-paper-raised px-4 sm:px-3 lg:px-3.5 py-1.5 text-[15px] sm:text-sm lg:text-[13px] font-medium text-ink shadow-sm whitespace-nowrap"
               }
             >
               {step}
