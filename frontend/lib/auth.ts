@@ -1,8 +1,5 @@
-// Mock auth layer. No real backend — this stores a session in localStorage
-// so the prototype has a believable login/signup gate. Swap for real
-// session cookies / JWT once a backend exists; callers only touch this file.
-
 const AUTH_KEY = "pitchground_auth_v1";
+const TOKEN_KEY = "pitchground_jwt_v1";
 
 export interface AuthSession {
   name: string;
@@ -25,9 +22,20 @@ export function getAuth(): AuthSession | null {
   }
 }
 
+export function saveToken(token: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
 export function clearAuth() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(AUTH_KEY);
+  window.localStorage.removeItem(TOKEN_KEY);
 }
 
 export function nameFromEmail(email: string): string {

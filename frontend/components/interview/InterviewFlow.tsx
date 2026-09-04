@@ -17,6 +17,7 @@ import { ReplayPanel } from "@/components/interview/ReplayPanel";
 import { ImprovementPanel } from "@/components/interview/ImprovementPanel";
 
 import { buildBaselineQuestion, buildPressureQuestion } from "@/mock/questions";
+import { mockTranscripts } from "@/mock/transcripts";
 import { analyzeAttempt, ANALYSIS_STAGES, diagnose, DIAGNOSIS_STAGES, compareImprovement } from "@/services/analysisService";
 import { requestChallenge, requestReplay } from "@/services/challengeService";
 import { saveCompletedSession } from "@/services/learnerService";
@@ -194,7 +195,7 @@ export function InterviewFlow() {
             {stage === "baseline-question" && (
               <RecordingPanel
                 question={baselineQuestion}
-                language={config.language}
+                transcript={mockTranscripts.baseline}
                 onSubmit={handleBaselineSubmit}
               />
             )}
@@ -218,7 +219,7 @@ export function InterviewFlow() {
             {stage === "pressure-question" && (
               <RecordingPanel
                 question={pressureQuestion}
-                language={config.language}
+                transcript={mockTranscripts.pressure}
                 onSubmit={() => setStage("pressure-analyzing")}
               />
             )}
@@ -260,7 +261,7 @@ export function InterviewFlow() {
             {stage === "replay-question" && replayQuestion && (
               <RecordingPanel
                 question={replayQuestion}
-                language={config.language}
+                transcript={mockTranscripts.retry}
                 onSubmit={() => setStage("retry-analyzing")}
               />
             )}

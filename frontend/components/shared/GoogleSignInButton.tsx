@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { API_URL } from "@/lib/api";
 
 export function GoogleSignInButton({ callbackUrl }: { callbackUrl: string }) {
   const [loading, setLoading] = useState(false);
@@ -12,7 +12,8 @@ export function GoogleSignInButton({ callbackUrl }: { callbackUrl: string }) {
       disabled={loading}
       onClick={() => {
         setLoading(true);
-        void signIn("google", { callbackUrl });
+        const next = callbackUrl.startsWith("/") ? callbackUrl : "/dashboard";
+        window.location.href = `${API_URL}/auth/google?next=${encodeURIComponent(next)}`;
       }}
       className="mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-paper-raised px-4 py-3 text-sm font-medium text-ink transition-all duration-200 hover:bg-black/[0.03] disabled:opacity-60"
     >

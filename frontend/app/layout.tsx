@@ -15,7 +15,6 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/600.css";
 import "./globals.css";
-import { AuthProvider } from "@/components/shared/AuthProvider";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -32,9 +31,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        <AuthProvider>{children}</AuthProvider>
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
