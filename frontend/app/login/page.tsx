@@ -64,7 +64,7 @@
 //           {googleError ? (
 //             <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
 //               Google sign-in failed. In Google Cloud, add this exact redirect URI:
-//               <span className="mt-1 block font-mono">http://localhost:3000/api/auth/callback/google</span>
+//               <span className="mt-1 block font-mono">http://localhost:8000/auth/google/callback</span>
 //             </p>
 //           ) : null}
 
@@ -208,7 +208,7 @@ function LoginForm() {
           {googleError ? (
             <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
               Google sign-in failed. In Google Cloud, add this exact redirect URI:
-              <span className="mt-1 block font-mono">http://localhost:3000/api/auth/callback/google</span>
+              <span className="mt-1 block font-mono">http://localhost:8000/auth/google/callback</span>
             </p>
           ) : null}
 
