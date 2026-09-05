@@ -145,6 +145,8 @@ export default function DebateArenaPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const mobileUserTranscriptRef = useRef<HTMLParagraphElement>(null);
   const mobileAiTranscriptRef = useRef<HTMLParagraphElement>(null);
+  const desktopUserTranscriptRef = useRef<HTMLDivElement>(null);
+  const desktopAiTranscriptRef = useRef<HTMLDivElement>(null);
   const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
 
   // Evaluation results
@@ -165,16 +167,22 @@ export default function DebateArenaPage() {
   const isUserTurn = activeTurnInfo.speaker === "user";
   const isAiTurn = activeTurnInfo.speaker === "ai";
 
-  // Auto-scroll mobile transcript boxes to the bottom on new content
+  // Auto-scroll transcript boxes to the bottom on new content
   useEffect(() => {
     if (mobileUserTranscriptRef.current) {
       mobileUserTranscriptRef.current.scrollTop = mobileUserTranscriptRef.current.scrollHeight;
+    }
+    if (desktopUserTranscriptRef.current) {
+      desktopUserTranscriptRef.current.scrollTop = desktopUserTranscriptRef.current.scrollHeight;
     }
   }, [userTypedTranscript]);
 
   useEffect(() => {
     if (mobileAiTranscriptRef.current) {
       mobileAiTranscriptRef.current.scrollTop = mobileAiTranscriptRef.current.scrollHeight;
+    }
+    if (desktopAiTranscriptRef.current) {
+      desktopAiTranscriptRef.current.scrollTop = desktopAiTranscriptRef.current.scrollHeight;
     }
   }, [aiTypedTranscript]);
 
@@ -943,7 +951,7 @@ export default function DebateArenaPage() {
                         <span className="text-[11px] text-ink-soft">{activeTurnInfo.timeLimitSeconds}s target limit</span>
                       )}
                     </div>
-                    <div className="max-h-[160px] min-h-[110px] overflow-y-auto scroll-smooth rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
+                    <div ref={desktopUserTranscriptRef} className="max-h-[160px] min-h-[110px] overflow-y-auto scroll-smooth rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
                       {isUserTurn ? (
                         userSpeechPhase === "ready" ? (
                           <span className="text-muted">
@@ -1070,7 +1078,7 @@ export default function DebateArenaPage() {
                         </span>
                       )}
                     </div>
-                    <div className="max-h-[160px] min-h-[110px] overflow-y-auto scroll-smooth rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
+                    <div ref={desktopAiTranscriptRef} className="max-h-[160px] min-h-[110px] overflow-y-auto scroll-smooth rounded-xl border border-line bg-paper p-3 text-xs leading-relaxed text-ink sm:text-sm">
                       {isAiTurn ? (
                         <>
                           {aiTypedTranscript}

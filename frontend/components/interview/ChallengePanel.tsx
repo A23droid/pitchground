@@ -18,11 +18,25 @@ export function ChallengePanel({ challenge, onPractice }: { challenge: TargetedC
           </Badge>
           <h2 className="font-display text-2xl text-ink">{challenge.objective}</h2>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2">
+          {/* Desktop: original horizontal badge/pill flow */}
+          <div className="mt-5 hidden sm:flex sm:flex-wrap sm:items-center sm:gap-2">
             {challenge.framework.map((step, i) => (
               <div key={step} className="flex items-center gap-2">
                 <span className="rounded-full bg-teal px-3.5 py-1.5 text-sm font-medium text-white">{step}</span>
                 {i < challenge.framework.length - 1 && <ArrowRight size={14} className="text-muted" />}
+              </div>
+            ))}
+          </div>
+
+          {/* Mobile: clean, compact list */}
+          <div className="mt-4 flex flex-col gap-1.5 sm:hidden">
+            {challenge.framework.map((step) => (
+              <div
+                key={step}
+                className="flex items-start gap-2.5 rounded-xl border border-line/70 bg-paper px-3 py-2 text-xs leading-relaxed text-ink"
+              >
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-teal" />
+                <span className="min-w-0 flex-1 font-medium">{step}</span>
               </div>
             ))}
           </div>

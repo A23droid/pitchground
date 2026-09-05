@@ -39,7 +39,7 @@ export function ImpromptuReportPanel({
       <Card className="p-6 sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
               <Badge variant="lavender" size="sm">
                 <Zap size={12} />
                 Impromptu Diagnostic
@@ -51,7 +51,7 @@ export function ImpromptuReportPanel({
                 {config.language}
               </Badge>
             </div>
-            <h1 className="mt-2 font-display text-2xl font-semibold text-ink sm:text-3xl">
+            <h1 className="mt-0 font-display text-2xl font-semibold text-ink sm:mt-2 sm:text-3xl">
               &quot;{config.topic.prompt}&quot;
             </h1>
             <p className="mt-1 text-xs text-ink-soft">
@@ -120,42 +120,42 @@ export function ImpromptuReportPanel({
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-line bg-paper-raised p-4">
+        <div className="min-w-0 rounded-2xl border border-line bg-paper-raised p-4">
           <span className="text-xs font-medium text-muted">Initial Pace</span>
           <p className="mt-1 font-display text-2xl font-bold text-teal-ink">{analysis.initialWpm} WPM</p>
           <p className="mt-1 text-[11px] text-ink-soft">Strong opening velocity without hesitation</p>
         </div>
 
-        <div className="rounded-2xl border border-amber/40 bg-paper-raised p-4">
+        <div className="min-w-0 rounded-2xl border border-amber/40 bg-paper-raised p-4">
           <span className="text-xs font-medium text-muted">Late Phase Pace</span>
           <p className="mt-1 font-display text-2xl font-bold text-amber-ink">{analysis.finalWpm} WPM</p>
           <p className="mt-1 text-[11px] text-ink-soft">Decay after initial concept exhaust</p>
         </div>
 
-        <div className="rounded-2xl border border-rose/40 bg-paper-raised p-4">
+        <div className="min-w-0 rounded-2xl border border-rose/40 bg-paper-raised p-4">
           <span className="text-xs font-medium text-muted">Circular Repetitions</span>
           <p className="mt-1 font-display text-2xl font-bold text-rose">{analysis.repetitionCount} times</p>
           <p className="mt-1 text-[11px] text-ink-soft">Re-stating same point in loops</p>
         </div>
 
-        <div className="rounded-2xl border border-line bg-paper-raised p-4">
+        <div className="min-w-0 rounded-2xl border border-line bg-paper-raised p-4">
           <span className="text-xs font-medium text-muted">Late Fillers</span>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{analysis.fillerCount}</p>
           <p className="mt-1 text-[11px] text-ink-soft">Searching for next words</p>
         </div>
 
-        <div className="rounded-2xl border border-line bg-paper-raised p-4">
+        <div className="min-w-0 rounded-2xl border border-line bg-paper-raised p-4">
           <span className="text-xs font-medium text-muted">Lexical Diversity</span>
           <p className="mt-1 font-display text-2xl font-bold text-ink">{analysis.lexicalDiversity}%</p>
           <p className="mt-1 text-[11px] text-ink-soft">Unique word variety</p>
         </div>
 
-        <div className="rounded-2xl border border-line bg-paper-raised p-4">
+        <div className="min-w-0 rounded-2xl border border-line bg-paper-raised p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Code-Switching</span>
             <Languages size={13} className="text-muted" />
           </div>
-          <p className="mt-1 font-display text-2xl font-bold text-ink">
+          <p className="mt-1 min-w-0 font-display text-lg font-bold text-ink break-words hyphens-auto [overflow-wrap:anywhere] sm:text-2xl">
             {analysis.codeSwitchingDetected ? "Active" : "Monolingual"}
           </p>
           <p className="mt-1 text-[11px] text-ink-soft">
@@ -171,9 +171,9 @@ export function ImpromptuReportPanel({
 
       {/* Targeted Challenge Recommendation */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-xl text-ink">Recommended 30-Second PEEL Drill</h2>
-          <Button size="sm" onClick={onStartChallenge}>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-display text-lg sm:text-xl text-ink">Recommended 30-Second PEEL Drill</h2>
+          <Button size="sm" onClick={onStartChallenge} className="shrink-0">
             Start PEEL Drill
             <ArrowRight size={14} />
           </Button>
@@ -181,7 +181,7 @@ export function ImpromptuReportPanel({
         <ChallengePanel challenge={challenge} onPractice={onStartChallenge} />
       </div>
 
-      <div className="flex justify-end gap-3 pb-8">
+      <div className="hidden sm:flex justify-end gap-3 sm:pb-8">
         {/* <Button size="lg" variant="outline" onClick={onDone}>
           Back to Dashboard
         </Button> */}

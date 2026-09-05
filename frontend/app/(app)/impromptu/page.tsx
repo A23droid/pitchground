@@ -144,7 +144,7 @@ export default function ImpromptuPage() {
   };
 
   return (
-    <div className="mx-auto mt-6 w-full max-w-4xl px-4 pb-24 sm:mt-8 sm:px-6">
+    <div className="mx-auto mt-6 w-full max-w-4xl px-4 pb-8 sm:pb-24 sm:mt-8 sm:px-6">
       {/* Breadcrumb Header */}
       {/* <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2 overflow-hidden">
