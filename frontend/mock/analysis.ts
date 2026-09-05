@@ -29,13 +29,13 @@ function baseAnalysis(overrides: Partial<AttemptAnalysis> = {}): AttemptAnalysis
   };
 }
 
-/** Round 1 — Baseline: strong, unhurried performance. */
+/** Round 1 (Baseline): strong, unhurried performance. */
 export function generateBaselineAnalysis(): AttemptAnalysis {
   return baseAnalysis();
 }
 
 /**
- * Round 2 — Pressure: content knowledge holds, but communication and voice
+ * Round 2 (Pressure): content knowledge holds, but communication and voice
  * metrics deliberately deteriorate under the 20s timer, per the product PRD.
  */
 export function generatePressureAnalysis(): AttemptAnalysis {
@@ -48,7 +48,7 @@ export function generatePressureAnalysis(): AttemptAnalysis {
   });
 }
 
-/** Retry — after the targeted challenge: measurable recovery, not a full reset. */
+/** Retry (after the targeted challenge): measurable recovery, not a full reset. */
 export function generateRetryAnalysis(): AttemptAnalysis {
   return baseAnalysis({
     content: { correctness: 90, relevance: 91, topicUnderstanding: 90 },

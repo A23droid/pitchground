@@ -3,7 +3,7 @@ import type { InterviewSession, ScenarioConfig } from "@/lib/types";
 
 // Mirrors: POST /sessions, GET /sessions/{id}
 // Swap the body of these functions for real fetch() calls once the FastAPI
-// backend exists — callers never need to change.
+// backend exists; callers never need to change.
 
 let sessionCounter = 0;
 

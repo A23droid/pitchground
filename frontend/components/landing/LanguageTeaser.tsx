@@ -47,7 +47,7 @@ export function LanguageTeaser() {
         <div className="border-t border-line bg-paper px-6 py-5 sm:px-8">
           <p className="text-sm text-ink-soft">
             Concept understanding barely moves. Communication drops 33 points. Pitchground recommends practicing
-            <span className="font-medium text-ink"> professional English articulation</span> — not another DBMS
+            <span className="font-medium text-ink"> professional English articulation</span>, not another DBMS
             lesson.
           </p>
         </div>

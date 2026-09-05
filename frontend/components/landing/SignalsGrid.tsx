@@ -13,7 +13,7 @@ const signals = [
   {
     icon: FileText,
     title: "Transcript",
-    desc: "Structure, clarity, coherence, transitions — fillers kept in, not scrubbed out.",
+    desc: "Structure, clarity, coherence, transitions (fillers kept in, not scrubbed out).",
   },
   {
     icon: BrainCircuit,
@@ -23,7 +23,7 @@ const signals = [
   {
     icon: Eye,
     title: "Visual",
-    desc: "Gaze stability and engagement — observable signals, not a confidence score.",
+    desc: "Gaze stability and engagement: observable signals, not a confidence score.",
   },
   {
     icon: Languages,

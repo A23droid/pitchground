@@ -39,7 +39,7 @@ export default function LanguageDiagnosticPage() {
   };
   const englishQuestion: RoundQuestion = {
     id: "lang-english",
-    prompt: "Now explain the same concept — database indexing — in professional English.",
+    prompt: "Now explain the same concept (database indexing) in professional English.",
     round: "baseline",
     pressure: "none",
   };

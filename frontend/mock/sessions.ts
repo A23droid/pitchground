@@ -25,7 +25,7 @@ export const DEFAULT_RECENT_SESSIONS: RecentSessionSummary[] = [
   },
   {
     id: "sess-interview-104",
-    topic: "Interview: Database Systems — Indexing",
+    topic: "Interview: Database Systems (Indexing)",
     mode: "interview",
     date: "Aug 27",
     overallScore: 74,
@@ -35,7 +35,7 @@ export const DEFAULT_RECENT_SESSIONS: RecentSessionSummary[] = [
   },
   {
     id: "sess-interview-103",
-    topic: "Interview: Operating Systems — Deadlocks",
+    topic: "Interview: Operating Systems (Deadlocks)",
     mode: "interview",
     date: "Aug 23",
     overallScore: 71,

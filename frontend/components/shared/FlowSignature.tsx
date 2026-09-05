@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 /**
  * The product's signature visual: a spoken line that starts jagged and
  * unstructured, then resolves into a clean three-beat shape as it crosses
- * the midpoint — literally drawing "rambling becomes structure," which is
+ * the midpoint, literally drawing "rambling becomes structure," which is
  * Pitchground's entire thesis. Used on the dashboard hero and loading
  * states so the same idea recurs across the product.
  */

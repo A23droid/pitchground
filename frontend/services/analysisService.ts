@@ -22,7 +22,7 @@ export async function analyzeAttempt(stage: AttemptStage): Promise<AttemptAnalys
   await delay(900);
   if (stage === "baseline") return generateBaselineAnalysis();
   if (stage === "pressure") return generatePressureAnalysis();
-  // "replay" is the retry attempt itself — the same pressure condition,
+  // "replay" is the retry attempt itself: the same pressure condition,
   // answered again after the targeted challenge.
   return generateRetryAnalysis();
 }

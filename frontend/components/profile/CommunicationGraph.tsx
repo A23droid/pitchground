@@ -51,7 +51,7 @@ export function CommunicationGraph() {
         <h2 className="font-display text-lg text-ink">Communication graph</h2>
       </div>
       <p className="mb-5 text-[13px] text-ink-soft">
-        Relationships Pitchground has learned — e.g. &ldquo;English + time pressure → structure deterioration&rdquo; —
+        Relationships Pitchground has learned (e.g. &ldquo;English + time pressure → structure deterioration&rdquo;)
         become persistent knowledge, not a one-time score.
       </p>
 

@@ -24,7 +24,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <div className="mx-auto mt-8 flex w-full max-w-6xl flex-col gap-6 px-4 sm:px-6">
+      <div className="mx-auto mt-6 flex w-full max-w-6xl min-w-0 flex-col gap-6 px-4 sm:mt-8 sm:px-6">
         {loading ? (
           <DashboardSkeleton />
         ) : (
@@ -32,7 +32,7 @@ export default function DashboardPage() {
             initial="hidden"
             animate="show"
             variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}
-            className="flex flex-col gap-6"
+            className="flex w-full min-w-0 flex-col gap-6"
           >
             <FadeIn>
               <DashboardHero profile={profile} />
@@ -40,9 +40,6 @@ export default function DashboardPage() {
             <FadeIn>
               <RecommendedNext profile={profile} />
             </FadeIn>
-            {/* <FadeIn>
-              <ProgressChart data={profile.progress} />
-            </FadeIn> */}
             <FadeIn>
               <StrengthsWeaknesses strengths={profile.strengths} weaknesses={profile.weaknesses} />
             </FadeIn>
@@ -55,7 +52,11 @@ export default function DashboardPage() {
 
 function FadeIn({ children }: { children: React.ReactNode }) {
   return (
-    <motion.div variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}>
+    <motion.div
+      variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0 } }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="w-full min-w-0"
+    >
       {children}
     </motion.div>
   );
@@ -63,16 +64,16 @@ function FadeIn({ children }: { children: React.ReactNode }) {
 
 function DashboardSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="h-[360px] animate-pulse-soft rounded-[28px] border border-line bg-paper-raised" />
+    <div className="flex w-full min-w-0 flex-col gap-6">
+      <div className="h-[360px] animate-pulse-soft rounded-[24px] border border-line bg-paper-raised sm:rounded-[28px]" />
       <div className="grid gap-5 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <div key={i} className="h-40 animate-pulse-soft rounded-2xl border border-line bg-paper-raised" />
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="h-72 animate-pulse-soft rounded-2xl border border-line bg-paper-raised" />
-        <div className="h-72 animate-pulse-soft rounded-2xl border border-line bg-paper-raised" />
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="h-64 animate-pulse-soft rounded-2xl border border-line bg-paper-raised" />
+        <div className="h-64 animate-pulse-soft rounded-2xl border border-line bg-paper-raised" />
       </div>
     </div>
   );

@@ -84,7 +84,7 @@ export function PrepCountdown({
 
       <div className="flex items-center justify-center gap-3">
         <Button size="lg" onClick={onComplete} className="w-full sm:w-auto">
-          I&apos;m ready — Start speaking now
+          I&apos;m ready: Start speaking now
           <ArrowRight size={16} />
         </Button>
       </div>

@@ -57,7 +57,7 @@ export function LanguageComparisonPanel({
             Evidence suggests a communication/language barrier
           </Badge>
           <h2 className="font-display text-2xl leading-snug text-ink sm:text-[1.6rem]">
-            Knowledge stayed within {knowledgeGap} points across languages — communication didn&apos;t.
+            Knowledge stayed within {knowledgeGap} points across languages; communication didn&apos;t.
           </h2>
           <p className="mt-2 max-w-xl text-[14px] text-ink-soft">
             Structure dropped {gap} points once the same concept had to be explained in English. Pitchground

@@ -9,9 +9,9 @@ import { TrendingUp, Mic, Swords, Zap, Languages } from "lucide-react";
 
 export function RecentSessions({ sessions }: { sessions: RecentSessionSummary[] }) {
   return (
-    <Card className="p-6">
-      <div className="mb-5 flex items-center justify-between">
-        <h2 className="font-display text-xl text-ink">Recent sessions</h2>
+    <Card className="min-w-0 p-5 sm:p-6">
+      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-lg sm:text-xl text-ink">Recent sessions</h2>
         <span className="text-xs font-medium text-muted">Pitchground remembers all of these</span>
       </div>
       <div className="flex flex-col">
@@ -21,10 +21,10 @@ export function RecentSessions({ sessions }: { sessions: RecentSessionSummary[] 
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.05, duration: 0.35 }}
-            className="flex items-center justify-between gap-4 border-b border-line py-3.5 last:border-b-0"
+            className="flex items-center justify-between gap-3 sm:gap-4 border-b border-line py-3.5 last:border-b-0"
           >
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 min-w-0">
                 {s.mode === "debate" && (
                   <Badge variant="lavender" size="sm" className="h-5 px-1.5 text-[10px]">
                     <Swords size={9} /> Debate

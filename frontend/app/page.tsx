@@ -144,7 +144,7 @@ export default function LandingPage() {
             <div>
               <p className="font-display text-lg text-ink">Phone</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">
-                Camera, mic, voice-activity detection, and lightweight local feature extraction — the sensing layer.
+                Camera, mic, voice-activity detection, and lightweight local feature extraction (the sensing layer).
               </p>
             </div>
           </div>
@@ -155,8 +155,8 @@ export default function LandingPage() {
             <div>
               <p className="font-display text-lg text-ink">Orchestrator</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-soft">
-                Multimodal fusion, the learner graph, and scenario generation — the decision layer that closes the
-                loop.
+                Multimodal fusion, the learner graph, and scenario generation (the decision layer that closes the
+                loop).
               </p>
             </div>
           </div>
@@ -180,7 +180,7 @@ export default function LandingPage() {
       <footer className="border-t border-line px-4 py-10 sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 sm:flex-row">
           <Logo />
-          <p className="text-xs text-muted">Built for iQOO ReSkill 2026 — Smart Education track.</p>
+          <p className="text-xs text-muted">Built for iQOO ReSkill 2026: Smart Education track.</p>
         </div>
       </footer>
     </main>

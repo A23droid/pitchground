@@ -21,7 +21,7 @@ export function LanguageDiagnosticCard() {
           <h2 className="font-display text-lg text-ink">Knowledge vs. articulation</h2>
         </div>
         <p className="mb-5 text-[13px] text-ink-soft">
-          Same concept, explained comfortably in Malayalam, then again in English — isolating what's actually
+          Same concept, explained comfortably in Malayalam, then again in English, isolating what's actually
           holding you back.
         </p>
 
@@ -42,7 +42,7 @@ export function LanguageDiagnosticCard() {
             Recommendation
           </Badge>
           <p className="text-sm text-ink-soft">
-            Practice explaining technical concepts in professional English — the gap isn&apos;t understanding, it&apos;s
+            Practice explaining technical concepts in professional English: the gap isn&apos;t understanding, it&apos;s
             target-language delivery. Code-switching in earlier attempts was treated as a legitimate signal, not a
             penalty.
           </p>

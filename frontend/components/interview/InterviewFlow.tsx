@@ -79,7 +79,7 @@ const stageToStep: Record<Stage, LoopStep | null> = {
 export function InterviewFlow() {
   const router = useRouter();
 
-  // Config state — filled in the setup screen
+  // Config state: filled in the setup screen
   const [topic, setTopic] = useState(topics[0]);
   const [audience, setAudience] = useState<Audience>("Technical interviewer");
   const [language, setLanguage] = useState<Language>("English");
@@ -162,7 +162,7 @@ export function InterviewFlow() {
   return (
     <>
       <div className="mx-auto mt-6 w-full max-w-4xl px-4 sm:mt-8 sm:px-6">
-        {/* Badge — hidden on setup screen */}
+        {/* Badge: hidden on setup screen */}
         {stageToStep[stage] && (
           <div className="mb-5">
             <Badge variant="dark" size="sm">

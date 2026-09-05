@@ -637,7 +637,7 @@ export default function DebateArenaPage() {
                 MOBILE LAYOUT: Layered stacked phone UI (hidden on lg+)
             ═══════════════════════════════════════════════════════════════ */}
             <div className="flex flex-col gap-0 overflow-hidden rounded-2xl border border-line shadow-soft lg:hidden">
-              {/* Layer 1: Context — Topic + Turn Indicator */}
+              {/* Layer 1: Context: Topic + Turn Indicator */}
               {/* <div className="flex items-center justify-between border-b border-line bg-paper-raised px-4 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted">

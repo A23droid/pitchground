@@ -66,7 +66,7 @@ export function Nav() {
   return (
     <>
       {/* Top Navigation Bar */}
-      <div className="sticky top-3 z-40 mx-auto w-full max-w-6xl px-3 sm:top-4 sm:px-6">
+      <div className="sticky top-3 z-40 mx-auto w-full max-w-6xl px-4 sm:top-4 sm:px-6">
         <nav className="flex w-full items-center justify-between gap-2 rounded-full border border-line bg-paper-raised/90 px-3.5 py-2 shadow-soft backdrop-blur-md sm:gap-4 sm:px-5 sm:py-2.5">
           <Link href="/dashboard" className="shrink-0" onClick={() => setMobileMenuOpen(false)}>
             <Logo />

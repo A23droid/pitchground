@@ -9,7 +9,7 @@ import type { RecoveryResult } from "@/mock/recovery";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 
 const verdictCopy: Record<RecoveryResult["verdict"], string> = {
-  "strong-recovery": "You recovered structure and fluency within ~2 seconds of the interruption — this is a low-impact condition for you.",
+  "strong-recovery": "You recovered structure and fluency within ~2 seconds of the interruption; this is a low-impact condition for you.",
   "partial-recovery": "You recovered most of your structure, but fluency took longer to settle back in.",
   "weak-recovery": "Structure and fluency both dropped and stayed lower for the rest of the answer.",
 };

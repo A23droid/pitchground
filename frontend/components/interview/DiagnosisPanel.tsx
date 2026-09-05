@@ -36,7 +36,7 @@ export function DiagnosisPanel({ diagnosis }: { diagnosis: FailureDiagnosis }) {
             <Progress value={diagnosis.confidence * 100} barClassName="bg-rose-ink" />
             <p className="mt-2 text-[12px] text-muted">
               Based on {diagnosis.occurrences} prior session{diagnosis.occurrences === 1 ? "" : "s"} showing the same
-              pattern — not a one-off read.
+              pattern, not a one-off read.
             </p>
           </div>
         </div>

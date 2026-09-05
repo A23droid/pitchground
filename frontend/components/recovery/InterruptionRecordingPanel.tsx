@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 
-const INTERRUPT_MARKER = " — [interrupted] — ";
+const INTERRUPT_MARKER = " ... [interrupted] ... ";
 
 export function InterruptionRecordingPanel({
   prompt,

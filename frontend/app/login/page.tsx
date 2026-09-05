@@ -76,7 +76,7 @@
 //             disabled={demoLoading}
 //             className="mt-3 w-full rounded-xl border border-dashed border-lavender-ink/40 bg-lavender/40 px-4 py-3 text-sm font-medium text-lavender-ink transition-all duration-200 hover:bg-lavender/70 disabled:opacity-60"
 //           >
-//             {demoLoading ? "Loading demo…" : "✦ Try demo — no account needed"}
+//             {demoLoading ? "Loading demo…" : "Try demo (no account needed)"}
 //           </button>
 
 //           <div className="my-5 flex items-center gap-3">
@@ -252,7 +252,7 @@ function LoginForm() {
             disabled={demoLoading}
             className="w-full rounded-xl border border-dashed border-lavender-ink/40 bg-lavender/40 px-4 py-3 text-sm font-medium text-lavender-ink transition-all duration-200 hover:bg-lavender/70 disabled:opacity-60"
           >
-            {demoLoading ? "Loading demo…" : "✦ Try demo — no account needed"}
+            {demoLoading ? "Loading demo…" : "Try demo (no account needed)"}
           </button>
 
           <div className="mt-3">

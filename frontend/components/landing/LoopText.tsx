@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 
 /**
- * A faint, looping scribble of text sitting behind the hero headline — the
+ * A faint, looping scribble of text sitting behind the hero headline, the
  * landing-page cousin of FlowSignature. The words are a real (mocked)
  * rambling transcript, since that's literally the thing Pitchground fixes.
  */

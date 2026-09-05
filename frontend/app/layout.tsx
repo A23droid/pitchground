@@ -23,7 +23,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Pitchground — Adaptive Communication Training",
+  title: "Pitchground: Adaptive Communication Training",
   description:
     "Pitchground doesn't just tell you how you speak. It learns where you break down and trains you to handle it.",
 };

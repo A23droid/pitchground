@@ -26,8 +26,8 @@ export function ReplayPanel({ conditions, onReplay }: { conditions: ReplayCondit
         </Badge>
         <h2 className="font-display text-2xl text-ink">Same conditions. One more attempt.</h2>
         <p className="mt-2 max-w-xl text-[14px] text-ink-soft">
-          Pitchground reconstructs the exact pressure that broke your structure last time, with a comparable — not
-          identical — question.
+          Pitchground reconstructs the exact pressure that broke your structure last time, with a comparable (not
+          identical) question.
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-line bg-paper p-4 sm:grid-cols-3">

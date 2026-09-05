@@ -38,7 +38,7 @@ export default function RecoveryTrainingPage() {
               <h1 className="font-display text-3xl text-ink sm:text-4xl">Can you recover mid-answer?</h1>
               <p className="mx-auto mt-3 max-w-md text-[15px] text-ink-soft">
                 The interviewer will interrupt you partway through your answer. Pitchground measures how quickly
-                your structure and fluency recover — not whether you got interrupted at all.
+                your structure and fluency recover, not whether you got interrupted at all.
               </p>
               <Button size="lg" className="mt-7" onClick={() => setStage("question")}>
                 Begin

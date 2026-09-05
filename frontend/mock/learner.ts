@@ -72,7 +72,7 @@ export const mockLearnerProfile: LearnerProfile = {
 export const mockRecentSessions: RecentSessionSummary[] = [
   {
     id: "sess-104",
-    topic: "Database Systems — Indexing",
+    topic: "Database Systems: Indexing",
     date: "Today, 9:40 AM",
     overallScore: 74,
     scoreDelta: 23,
@@ -81,7 +81,7 @@ export const mockRecentSessions: RecentSessionSummary[] = [
   },
   {
     id: "sess-103",
-    topic: "Operating Systems — Deadlocks",
+    topic: "Operating Systems: Deadlocks",
     date: "Aug 23",
     overallScore: 71,
     scoreDelta: 9,
@@ -90,7 +90,7 @@ export const mockRecentSessions: RecentSessionSummary[] = [
   },
   {
     id: "sess-102",
-    topic: "System Design — Caching",
+    topic: "System Design: Caching",
     date: "Aug 19",
     overallScore: 68,
     scoreDelta: 6,
@@ -99,7 +99,7 @@ export const mockRecentSessions: RecentSessionSummary[] = [
   },
   {
     id: "sess-101",
-    topic: "Networking — TCP vs UDP",
+    topic: "Networking: TCP vs UDP",
     date: "Aug 15",
     overallScore: 64,
     scoreDelta: 4,
