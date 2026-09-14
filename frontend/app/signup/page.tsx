@@ -123,7 +123,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
-import { saveAuth } from "@/lib/auth";
+import { saveAuth, saveToken } from "@/lib/auth";
 import { ArrowRight, ArrowLeft, Mail, Lock, User } from "lucide-react";
 
 export default function SignupPage() {
@@ -133,13 +133,40 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    setTimeout(() => {
-      saveAuth({ name: name || "New learner", email: email || "student@example.com" });
+    setErrorMsg("");
+    try {
+      const res = await fetch("http://localhost:8000/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Failed to create account");
+      }
+      const data = await res.json();
+      saveToken(data.access_token);
+      
+      const meRes = await fetch("http://localhost:8000/auth/me", {
+        headers: { "Authorization": `Bearer ${data.access_token}` },
+      });
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        saveAuth({ name: meData.name || name || "New learner", email: meData.email });
+      } else {
+        saveAuth({ name: name || "New learner", email });
+      }
+      
       router.push("/start");
-    }, 500);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -166,6 +193,12 @@ export default function SignupPage() {
         <Card className="p-7 sm:p-8">
           <h1 className="font-display text-2xl text-ink">Create your account</h1>
           <p className="mt-1 text-sm text-ink-soft">Pitchground starts building your communication profile from session one.</p>
+
+          {errorMsg ? (
+            <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
+              {errorMsg}
+            </p>
+          ) : null}
 
           <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
             <Field label="Name" icon={<User size={14} />}>

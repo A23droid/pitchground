@@ -147,7 +147,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
-import { saveAuth, nameFromEmail } from "@/lib/auth";
+import { saveAuth, saveToken, nameFromEmail } from "@/lib/auth";
 import { ArrowRight, Mail, Lock } from "lucide-react";
 
 export default function LoginPage() {
@@ -167,13 +167,41 @@ function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    setTimeout(() => {
-      saveAuth({ name: nameFromEmail(email || "student@example.com"), email: email || "student@example.com" });
+    setErrorMsg("");
+    try {
+      const res = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Failed to login");
+      }
+      const data = await res.json();
+      saveToken(data.access_token);
+      
+      // Fetch user profile to get the name
+      const meRes = await fetch("http://localhost:8000/auth/me", {
+        headers: { "Authorization": `Bearer ${data.access_token}` },
+      });
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        saveAuth({ name: meData.name || nameFromEmail(email), email: meData.email });
+      } else {
+        saveAuth({ name: nameFromEmail(email), email });
+      }
+      
       router.push("/dashboard");
-    }, 500);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+      setSubmitting(false);
+    }
   }
 
   function onDemoLogin() {
@@ -212,7 +240,13 @@ function LoginForm() {
             </p>
           ) : null}
 
-          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          {errorMsg ? (
+            <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
+              {errorMsg}
+            </p>
+          ) : null}
+
+          <form onSubmit={onSubmit} className="flex flex-col gap-4 mt-4">
             <Field label="Email" icon={<Mail size={14} />}>
               <input
                 type="email"
@@ -239,6 +273,12 @@ function LoginForm() {
               {!submitting && <ArrowRight size={16} />}
             </Button>
           </form>
+
+          <div className="mt-3 text-center">
+            <Link href="/forgot-password" className="text-xs text-ink-soft hover:text-ink underline underline-offset-2">
+              Forgot password?
+            </Link>
+          </div>
 
           <div className="my-5 flex items-center gap-3">
             <div className="h-px flex-1 bg-line" />
