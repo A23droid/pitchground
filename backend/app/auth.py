@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import secrets
 import time
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -14,6 +15,16 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Learner
+from app.models.entities import Learner as LearnerModel
+
+try:
+    from app.models import User
+    from app.schemas import ForgotPassword, ResetPassword, Token, UserCreate, UserLogin
+    from app.security import generate_reset_token, get_password_hash, verify_password
+    from app.email_service import send_password_reset_email
+    HAS_USER_AUTH = True
+except Exception:
+    HAS_USER_AUTH = False
 
 load_dotenv()
 
@@ -57,6 +68,14 @@ def _issue_token(name: str, email: str, sub: str | None = None) -> str:
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
+def create_access_token(data: dict) -> str:
+    secret = os.getenv("JWT_SECRET", "")
+    to_encode = data.copy()
+    expire = int(time.time()) + 60 * 60 * 24 * 7
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, secret, algorithm="HS256")
+
+
 def _upsert_learner(db: Session, email: str, name: str, google_sub: str | None = None) -> Learner:
     learner = db.query(Learner).filter(Learner.email == email).one_or_none()
     if learner is None:
@@ -85,6 +104,61 @@ def decode_user(token: str) -> dict[str, str]:
         "email": str(email),
         "sub": str(payload.get("sub") or ""),
     }
+
+
+if HAS_USER_AUTH:
+    @router.post("/signup")
+    def signup(user_in: UserCreate, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.email == user_in.email).first()
+        if user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        hashed_password = get_password_hash(user_in.password)
+        db_user = User(
+            email=user_in.email,
+            name=user_in.name,
+            hashed_password=hashed_password,
+        )
+        db.add(db_user)
+        _upsert_learner(db, email=user_in.email, name=user_in.name or user_in.email.split("@")[0])
+        db.commit()
+        db.refresh(db_user)
+        token = _issue_token(name=db_user.name or db_user.email.split("@")[0], email=db_user.email)
+        return {"access_token": token, "token_type": "bearer"}
+
+    @router.post("/login")
+    def login(user_in: UserLogin, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.email == user_in.email).first()
+        if not user or not verify_password(user_in.password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+        _upsert_learner(db, email=user.email, name=user.name or user.email.split("@")[0])
+        token = _issue_token(name=user.name or user.email.split("@")[0], email=user.email)
+        return {"access_token": token, "token_type": "bearer"}
+
+    @router.post("/forgot-password")
+    def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.email == req.email).first()
+        if not user:
+            return {"message": "If that email is in our database, we will send a reset link."}
+        token = generate_reset_token()
+        user.reset_token = token
+        user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+        db.commit()
+        try:
+            send_password_reset_email(user.email, token)
+        except Exception:
+            pass
+        return {"message": "If that email is in our database, we will send a reset link."}
+
+    @router.post("/reset-password")
+    def reset_password(req: ResetPassword, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.reset_token == req.token).first()
+        if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        user.hashed_password = get_password_hash(req.new_password)
+        user.reset_token = None
+        user.reset_token_expires = None
+        db.commit()
+        return {"message": "Password successfully reset"}
 
 
 @router.get("/google")

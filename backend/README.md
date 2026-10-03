@@ -22,6 +22,8 @@ Google Cloud redirect URI:
 http://localhost:8000/auth/google/callback
 ```
 
+Also keep `http://localhost:3000` as an authorized JavaScript origin.
+
 ## Demo without Google
 
 `POST /auth/demo` when `DEMO_AUTH=1`.
@@ -30,16 +32,18 @@ http://localhost:8000/auth/google/callback
 
 See [`app/ml/README.md`](app/ml/README.md). `ML_ANALYZER=stub` by default.
 
-## Key routes
+## Routes
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/health` | liveness |
-| GET | `/auth/google` | Google sign-in |
+| GET | `/auth/google` | start Google sign-in |
+| GET | `/auth/google/callback` | Google OAuth callback |
 | POST | `/auth/demo` | demo JWT |
 | GET | `/auth/me` | current user + learner |
-| POST | `/v1/sessions` | start interview |
+| POST | `/v1/sessions` | start interview / session |
 | POST | `/v1/sessions/{id}/advance` | phase lockstep |
+| POST | `/v1/sessions/{id}/complete` | complete session |
 | POST | `/v1/sessions/{id}/attempts/.../media` | upload audio/video |
 | POST | `/v1/sessions/{id}/attempts/.../complete` | queue analysis |
 | WS | `/v1/sessions/{id}/ws` | live events |

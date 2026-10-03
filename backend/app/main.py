@@ -18,6 +18,10 @@ async def lifespan(_: FastAPI):
     ensure_data_dirs()
     # Import models so metadata is registered
     import app.models  # noqa: F401
+    try:
+        import app.models as _extra_models  # noqa: F401
+    except Exception:
+        pass
 
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()

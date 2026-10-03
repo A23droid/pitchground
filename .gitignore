@@ -1,6 +1,11 @@
 # dependencies
 node_modules/
 **/node_modules/
+frontend/node_modules/
+backend/.venv/
+backend/venv/
+**/venv/
+**/.venv/
 /.pnp
 .pnp.*
 .yarn/*
@@ -15,7 +20,9 @@ node_modules/
 # next.js
 .next/
 **/.next/
+frontend/.next/
 /out/
+frontend/out/
 
 # production
 /build
@@ -26,6 +33,8 @@ node_modules/
 __pycache__/
 **/__pycache__/
 *.pyc
+backend/**/__pycache__/
+backend/**/*.pyc
 
 # debug
 npm-debug.log*
@@ -33,7 +42,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env
 .env.local
 .env*.local
@@ -41,12 +50,10 @@ backend/.env
 frontend/.env*
 !.env.example
 !backend/.env.example
+!frontend/.env.example
 
 # backend local data
-backend/.venv/
-**/venv/
-**/.venv/
-/backend/data/
+backend/data/
 *.db
 
 # vercel
@@ -55,4 +62,4 @@ backend/.venv/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
+frontend/next-env.d.ts
