@@ -21,6 +21,7 @@ import {
   IMPROMPTU_ANALYSIS_STAGES,
 } from "@/services/impromptuService";
 import { saveGenericSession } from "@/services/learnerService";
+import { createSession } from "@/services/sessionService";
 import type {
   Difficulty,
   FailureDiagnosis,
@@ -75,6 +76,7 @@ export default function ImpromptuPage() {
 
   // Flow state
   const [stage, setStage] = useState<ImpromptuStage>("setup");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<ImpromptuAnalysis | null>(null);
   const [diagnosisResult, setDiagnosisResult] = useState<FailureDiagnosis | null>(null);
   const [challengeResult, setChallengeResult] = useState<TargetedChallenge | null>(null);
@@ -102,8 +104,20 @@ export default function ImpromptuPage() {
     setSelectedTopic(getRandomImpromptuTopic(selectedTopic.id));
   }
 
-  function startPrep() {
+  async function startPrep() {
     setStage("prep");
+    try {
+      const sess = await createSession({
+        mode: "impromptu",
+        topic: activeTopic.prompt,
+        audience: "",
+        language: selectedLanguage,
+        difficulty: selectedDifficulty,
+      });
+      setSessionId(sess.id);
+    } catch (e) {
+      console.warn("Could not create impromptu backend session:", e);
+    }
   }
 
   async function handleSpeechSubmit(submittedTranscript: string) {
@@ -116,16 +130,23 @@ export default function ImpromptuPage() {
     setDiagnosisResult(res.diagnosis);
     setChallengeResult(res.challenge);
 
-    saveGenericSession({
+    await saveGenericSession({
+      sessionId: sessionId || undefined,
       topic: `Impromptu: ${config.topic.prompt.slice(0, 45)}...`,
       mode: "impromptu",
+      language: selectedLanguage,
+      difficulty: selectedDifficulty,
       overallScore: res.analysis.overallScore,
       scoreDelta: 12,
       primaryWeakness: "Lexical repetition after 30s",
+      diagnosis: res.diagnosis,
+      transcript: transcript,
+      metrics: res.analysis,
     });
 
     setStage("report");
   }
+
 
   const speakQuestion: RoundQuestion = {
     id: `imp-speak-${selectedTopic.id}`,
@@ -336,7 +357,7 @@ export default function ImpromptuPage() {
             <RecordingPanel
               question={speakQuestion}
               transcript={transcript}
-              onSubmit={handleSpeechSubmit}
+              onSubmit={(payload) => void handleSpeechSubmit(payload.transcript || transcript || "")}
             />
           )}
 

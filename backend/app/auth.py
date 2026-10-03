@@ -9,15 +9,22 @@ from urllib.parse import urlencode
 import httpx
 import jwt
 from dotenv import load_dotenv
-from fastapi import APIRouter, Header, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.models import User
-from app.schemas import UserCreate, UserLogin, ForgotPassword, ResetPassword, Token
-from app.security import get_password_hash, verify_password, generate_reset_token
-from app.email_service import send_password_reset_email
+from app.db import get_db
+from app.models import Learner
+from app.models.entities import Learner as LearnerModel
+
+try:
+    from app.models import User
+    from app.schemas import ForgotPassword, ResetPassword, Token, UserCreate, UserLogin
+    from app.security import generate_reset_token, get_password_hash, verify_password
+    from app.email_service import send_password_reset_email
+    HAS_USER_AUTH = True
+except Exception:
+    HAS_USER_AUTH = False
 
 load_dotenv()
 
@@ -47,12 +54,40 @@ def _settings() -> dict[str, str]:
     }
 
 
+def _issue_token(name: str, email: str, sub: str | None = None) -> str:
+    secret = os.getenv("JWT_SECRET", "")
+    if not secret:
+        raise HTTPException(status_code=500, detail="JWT_SECRET is not configured.")
+    payload = {
+        "name": name,
+        "email": email,
+        "exp": int(time.time()) + 60 * 60 * 24 * 7,
+    }
+    if sub:
+        payload["sub"] = sub
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
 def create_access_token(data: dict) -> str:
     secret = os.getenv("JWT_SECRET", "")
     to_encode = data.copy()
     expire = int(time.time()) + 60 * 60 * 24 * 7
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, secret, algorithm="HS256")
+
+
+def _upsert_learner(db: Session, email: str, name: str, google_sub: str | None = None) -> Learner:
+    learner = db.query(Learner).filter(Learner.email == email).one_or_none()
+    if learner is None:
+        learner = Learner(email=email, display_name=name, practice_language="en", google_sub=google_sub)
+        db.add(learner)
+    else:
+        learner.display_name = name or learner.display_name
+        if google_sub and not learner.google_sub:
+            learner.google_sub = google_sub
+    db.commit()
+    db.refresh(learner)
+    return learner
 
 
 def decode_user(token: str) -> dict[str, str]:
@@ -64,67 +99,66 @@ def decode_user(token: str) -> dict[str, str]:
     email = payload.get("email")
     if not email:
         raise HTTPException(status_code=401, detail="Invalid session.")
-    return {"name": str(payload.get("name") or email.split("@")[0]), "email": str(email)}
+    return {
+        "name": str(payload.get("name") or email.split("@")[0]),
+        "email": str(email),
+        "sub": str(payload.get("sub") or ""),
+    }
 
 
-@router.post("/signup", response_model=Token)
-def signup(user_in: UserCreate, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == user_in.email).first()
-    if user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    hashed_password = get_password_hash(user_in.password)
-    db_user = User(
-        email=user_in.email,
-        name=user_in.name,
-        hashed_password=hashed_password
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    
-    token = create_access_token({"name": db_user.name or db_user.email.split("@")[0], "email": db_user.email})
-    return {"access_token": token, "token_type": "bearer"}
+if HAS_USER_AUTH:
+    @router.post("/signup")
+    def signup(user_in: UserCreate, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.email == user_in.email).first()
+        if user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        hashed_password = get_password_hash(user_in.password)
+        db_user = User(
+            email=user_in.email,
+            name=user_in.name,
+            hashed_password=hashed_password,
+        )
+        db.add(db_user)
+        _upsert_learner(db, email=user_in.email, name=user_in.name or user_in.email.split("@")[0])
+        db.commit()
+        db.refresh(db_user)
+        token = _issue_token(name=db_user.name or db_user.email.split("@")[0], email=db_user.email)
+        return {"access_token": token, "token_type": "bearer"}
 
+    @router.post("/login")
+    def login(user_in: UserLogin, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.email == user_in.email).first()
+        if not user or not verify_password(user_in.password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+        _upsert_learner(db, email=user.email, name=user.name or user.email.split("@")[0])
+        token = _issue_token(name=user.name or user.email.split("@")[0], email=user.email)
+        return {"access_token": token, "token_type": "bearer"}
 
-@router.post("/login", response_model=Token)
-def login(user_in: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == user_in.email).first()
-    if not user or not verify_password(user_in.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
-    token = create_access_token({"name": user.name or user.email.split("@")[0], "email": user.email})
-    return {"access_token": token, "token_type": "bearer"}
-
-
-@router.post("/forgot-password")
-def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user:
-        # Don't reveal if user exists
+    @router.post("/forgot-password")
+    def forgot_password(req: ForgotPassword, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.email == req.email).first()
+        if not user:
+            return {"message": "If that email is in our database, we will send a reset link."}
+        token = generate_reset_token()
+        user.reset_token = token
+        user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+        db.commit()
+        try:
+            send_password_reset_email(user.email, token)
+        except Exception:
+            pass
         return {"message": "If that email is in our database, we will send a reset link."}
-    
-    token = generate_reset_token()
-    user.reset_token = token
-    user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
-    db.commit()
-    
-    send_password_reset_email(user.email, token)
-    return {"message": "If that email is in our database, we will send a reset link."}
 
-
-@router.post("/reset-password")
-def reset_password(req: ResetPassword, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.reset_token == req.token).first()
-    if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
-    
-    user.hashed_password = get_password_hash(req.new_password)
-    user.reset_token = None
-    user.reset_token_expires = None
-    db.commit()
-    
-    return {"message": "Password successfully reset"}
+    @router.post("/reset-password")
+    def reset_password(req: ResetPassword, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.reset_token == req.token).first()
+        if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        user.hashed_password = get_password_hash(req.new_password)
+        user.reset_token = None
+        user.reset_token_expires = None
+        db.commit()
+        return {"message": "Password successfully reset"}
 
 
 @router.get("/google")
@@ -144,7 +178,12 @@ def google_start(next: str = Query("/dashboard")):
 
 
 @router.get("/google/callback")
-def google_callback(code: str | None = None, state: str | None = None, error: str | None = None, db: Session = Depends(get_db)):
+def google_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
     cfg = _settings()
     frontend = cfg["frontend"]
     if error or not code or not state or state not in _oauth_states:
@@ -184,33 +223,34 @@ def google_callback(code: str | None = None, state: str | None = None, error: st
         return RedirectResponse(f"{frontend}/login?error=google")
 
     name = profile.get("name") or email.split("@")[0]
-    
-    # Store or update user in database
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        # Create a user with a random placeholder password since they log in via Google
-        user = User(
-            email=email,
-            name=name,
-            hashed_password=get_password_hash(secrets.token_urlsafe(32))
-        )
-        db.add(user)
-        db.commit()
-    
-    token = create_access_token({"name": name, "email": email})
+    google_sub = profile.get("sub")
+    _upsert_learner(db, email=email, name=name, google_sub=str(google_sub) if google_sub else None)
+    token = _issue_token(name=name, email=email, sub=str(google_sub) if google_sub else None)
     params = urlencode({"token": token, "next": next_path})
     return RedirectResponse(f"{frontend}/auth/callback?{params}")
+
+
+@router.post("/demo")
+def demo_login(db: Session = Depends(get_db)):
+    """Local/demo JWT so the interview loop works without Google."""
+    if os.getenv("DEMO_AUTH", "1") not in ("1", "true", "TRUE", "yes"):
+        raise HTTPException(status_code=403, detail="Demo auth disabled.")
+    email = "demo@pitchground.ai"
+    name = "Demo User"
+    learner = _upsert_learner(db, email=email, name=name)
+    token = _issue_token(name=name, email=email, sub=f"demo:{learner.id}")
+    return {"token": token, "name": name, "email": email, "learner_id": learner.id}
 
 
 @router.get("/me")
 def me(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Not signed in.")
-    
-    user_info = decode_user(authorization.split(" ", 1)[1].strip())
-    # Optionally, we can fetch from DB to verify user still exists
-    user = db.query(User).filter(User.email == user_info["email"]).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-        
-    return {"name": user.name, "email": user.email, "id": str(user.id)}
+    user = decode_user(authorization.split(" ", 1)[1].strip())
+    learner = _upsert_learner(db, email=user["email"], name=user["name"], google_sub=user.get("sub") or None)
+    return {
+        "name": learner.display_name,
+        "email": learner.email,
+        "learner_id": learner.id,
+        "practice_language": learner.practice_language,
+    }

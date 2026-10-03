@@ -19,7 +19,9 @@ import {
   DEBATE_ANALYSIS_STAGES,
 } from "@/services/debateService";
 import { saveGenericSession } from "@/services/learnerService";
+import { createSession } from "@/services/sessionService";
 import { cn } from "@/lib/utils";
+
 import type {
   DebateAnalysis,
   DebateConfig,
@@ -308,7 +310,9 @@ export default function DebateArenaPage() {
     setSelectedPosition(Math.random() > 0.5 ? "For" : "Against");
   }
 
-  function enterArena() {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  async function enterArena() {
     setPageMode("arena");
     setCurrentTurn("user-opening");
     setUserSpeechPhase("ready");
@@ -316,6 +320,18 @@ export default function DebateArenaPage() {
     setUserTypedTranscript("");
     setAiTypedTranscript("");
     setDebateHistory({});
+    try {
+      const sess = await createSession({
+        mode: "debate",
+        topic: selectedTopic.title,
+        audience: selectedPosition,
+        language: selectedLanguage,
+        difficulty: selectedDifficulty,
+      });
+      setSessionId(sess.id);
+    } catch (e) {
+      console.warn("Could not create debate backend session:", e);
+    }
   }
 
   function startUserSpeaking() {
@@ -388,16 +404,24 @@ export default function DebateArenaPage() {
     setDiagnosisResult(res.diagnosis);
     setChallengeResult(res.challenge);
 
-    saveGenericSession({
+    await saveGenericSession({
+      sessionId: sessionId || undefined,
       topic: `Debate: ${config.topic.title}`,
       mode: "debate",
+      audience: selectedPosition,
+      language: selectedLanguage,
+      difficulty: selectedDifficulty,
       overallScore: res.analysis.overallScore,
       scoreDelta: 18,
       primaryWeakness: "Rebuttal under counter-pressure",
+      diagnosis: res.diagnosis,
+      transcript: [script.userOpening, script.userRebuttal, script.userClosing].filter(Boolean).join(" "),
+      metrics: res.analysis,
     });
 
     setPageMode("report");
   }
+
 
   const challengeQuestion: RoundQuestion = {
     id: `debate-chal-q`,

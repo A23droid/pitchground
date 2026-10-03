@@ -1,9 +1,13 @@
+import { API_URL, clearToken, getToken, setToken } from "@/lib/api";
+
+export { getToken, setToken, clearToken };
+
 const AUTH_KEY = "pitchground_auth_v1";
-const TOKEN_KEY = "pitchground_jwt_v1";
 
 export interface AuthSession {
   name: string;
   email: string;
+  learnerId?: string;
 }
 
 export function saveAuth(session: AuthSession) {
@@ -23,19 +27,13 @@ export function getAuth(): AuthSession | null {
 }
 
 export function saveToken(token: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  setToken(token);
 }
 
 export function clearAuth() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(AUTH_KEY);
-  window.localStorage.removeItem(TOKEN_KEY);
+  clearToken();
 }
 
 export function nameFromEmail(email: string): string {
@@ -46,4 +44,35 @@ export function nameFromEmail(email: string): string {
     .filter(Boolean)
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+export function googleAuthUrl(next = "/dashboard"): string {
+  const params = new URLSearchParams({ next });
+  return `${API_URL}/auth/google?${params.toString()}`;
+}
+
+export async function loginWithDemo(): Promise<AuthSession> {
+  const res = await fetch(`${API_URL}/auth/demo`, { method: "POST" });
+  if (!res.ok) throw new Error("Demo login failed");
+  const data = (await res.json()) as { token: string; name: string; email: string; learner_id: string };
+  setToken(data.token);
+  const session = { name: data.name, email: data.email, learnerId: data.learner_id };
+  saveAuth(session);
+  return session;
+}
+
+export async function completeTokenLogin(token: string): Promise<AuthSession> {
+  setToken(token);
+  const res = await fetch(`${API_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Invalid session");
+  const data = (await res.json()) as { name: string; email: string; learner_id: string };
+  const session = { name: data.name, email: data.email, learnerId: data.learner_id };
+  saveAuth(session);
+  return session;
+}
+
+export function hasBackendSession(): boolean {
+  return Boolean(getToken());
 }
