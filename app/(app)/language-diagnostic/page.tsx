@@ -11,6 +11,8 @@ import { RecordingPanel } from "@/components/interview/RecordingPanel";
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
 import { LanguageComparisonPanel } from "@/components/language/LanguageComparisonPanel";
 import { ANALYSIS_STAGES } from "@/services/analysisService";
+import { saveGenericSession } from "@/services/learnerService";
+import { createSession } from "@/services/sessionService";
 import {
   generateComfortableLanguageAnalysis,
   generateEnglishAttemptAnalysis,
@@ -27,6 +29,7 @@ const comfortableOptions: Language[] = ["Malayalam", "Hindi", "Mixed"];
 export default function LanguageDiagnosticPage() {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("intro");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>("Malayalam");
   const [comfortableResult, setComfortableResult] = useState<AttemptAnalysis | null>(null);
   const [englishResult, setEnglishResult] = useState<AttemptAnalysis | null>(null);
@@ -44,6 +47,22 @@ export default function LanguageDiagnosticPage() {
     pressure: "none",
   };
 
+  async function beginDiagnostic() {
+    setStage("comfortable-question");
+    try {
+      const sess = await createSession({
+        mode: "language-diagnostic",
+        topic: `Explain database indexing (${language} vs English)`,
+        audience: "",
+        language,
+        difficulty: "Standard",
+      });
+      setSessionId(sess.id);
+    } catch (e) {
+      console.warn("Could not create language-diagnostic backend session:", e);
+    }
+  }
+
   async function onComfortableAnalyzed() {
     await delay(0);
     setComfortableResult(generateComfortableLanguageAnalysis(language));
@@ -52,7 +71,24 @@ export default function LanguageDiagnosticPage() {
 
   async function onEnglishAnalyzed() {
     await delay(0);
-    setEnglishResult(generateEnglishAttemptAnalysis());
+    const comfortable = generateComfortableLanguageAnalysis(language);
+    const english = generateEnglishAttemptAnalysis();
+    setComfortableResult(comfortable);
+    setEnglishResult(english);
+
+    await saveGenericSession({
+      sessionId: sessionId || undefined,
+      topic: `Language Diagnostic (${language} vs English)`,
+      mode: "language-diagnostic",
+      language,
+      difficulty: "Standard",
+      overallScore: english.overallScore,
+      scoreDelta: english.overallScore - comfortable.overallScore,
+      primaryWeakness: "English articulation vs conceptual knowledge",
+      transcript: `${languageDiagnosticTranscripts.comfortable} | ${languageDiagnosticTranscripts.english}`,
+      metrics: { comfortable, english },
+    });
+
     setStage("result");
   }
 
@@ -87,12 +123,13 @@ export default function LanguageDiagnosticPage() {
                 <ChipGroup options={comfortableOptions} value={language} onChange={setLanguage} />
               </div>
 
-              <Button size="lg" className="mt-7" onClick={() => setStage("comfortable-question")}>
+              <Button size="lg" className="mt-7" onClick={beginDiagnostic}>
                 Begin in {language}
                 <ArrowRight size={16} />
               </Button>
             </Card>
           )}
+
 
           {stage === "comfortable-question" && (
             <RecordingPanel

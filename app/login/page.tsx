@@ -147,7 +147,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
-import { saveAuth, nameFromEmail } from "@/lib/auth";
+import { saveAuth, nameFromEmail, loginWithDemo } from "@/lib/auth";
 import { ArrowRight, Mail, Lock } from "lucide-react";
 
 export default function LoginPage() {
@@ -167,21 +167,30 @@ function LoginForm() {
   const [submitting, setSubmitting] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    setTimeout(() => {
-      saveAuth({ name: nameFromEmail(email || "student@example.com"), email: email || "student@example.com" });
+    try {
+      // Password auth is not shipped in P0 — issue a demo JWT so /v1 works.
+      const session = await loginWithDemo();
+      saveAuth({
+        ...session,
+        name: nameFromEmail(email || session.email),
+      });
       router.push("/dashboard");
-    }, 500);
+    } catch {
+      setSubmitting(false);
+    }
   }
 
-  function onDemoLogin() {
+  async function onDemoLogin() {
     setDemoLoading(true);
-    setTimeout(() => {
-      saveAuth({ name: "Victor", email: "demo@pitchground.ai" });
+    try {
+      await loginWithDemo();
       router.push("/dashboard");
-    }, 600);
+    } catch {
+      setDemoLoading(false);
+    }
   }
 
   return (
@@ -208,7 +217,7 @@ function LoginForm() {
           {googleError ? (
             <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
               Google sign-in failed. In Google Cloud, add this exact redirect URI:
-              <span className="mt-1 block font-mono">http://localhost:3000/api/auth/callback/google</span>
+              <span className="mt-1 block font-mono">http://localhost:8000/auth/google/callback</span>
             </p>
           ) : null}
 

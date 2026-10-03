@@ -123,7 +123,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
-import { saveAuth } from "@/lib/auth";
+import { loginWithDemo, saveAuth } from "@/lib/auth";
 import { ArrowRight, ArrowLeft, Mail, Lock, User } from "lucide-react";
 
 export default function SignupPage() {
@@ -133,13 +133,16 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    setTimeout(() => {
-      saveAuth({ name: name || "New learner", email: email || "student@example.com" });
+    try {
+      await loginWithDemo();
+      saveAuth({ name: name || "New learner", email: email || "demo@pitchground.ai" });
       router.push("/start");
-    }, 500);
+    } catch {
+      setSubmitting(false);
+    }
   }
 
   return (

@@ -1,12 +1,11 @@
-// Mock auth layer. No real backend — this stores a session in localStorage
-// so the prototype has a believable login/signup gate. Swap for real
-// session cookies / JWT once a backend exists; callers only touch this file.
+import { API_URL, clearToken, getToken, setToken } from "@/lib/api";
 
 const AUTH_KEY = "pitchground_auth_v1";
 
 export interface AuthSession {
   name: string;
   email: string;
+  learnerId?: string;
 }
 
 export function saveAuth(session: AuthSession) {
@@ -28,6 +27,7 @@ export function getAuth(): AuthSession | null {
 export function clearAuth() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(AUTH_KEY);
+  clearToken();
 }
 
 export function nameFromEmail(email: string): string {
@@ -38,4 +38,35 @@ export function nameFromEmail(email: string): string {
     .filter(Boolean)
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+export function googleAuthUrl(next = "/dashboard"): string {
+  const params = new URLSearchParams({ next });
+  return `${API_URL}/auth/google?${params.toString()}`;
+}
+
+export async function loginWithDemo(): Promise<AuthSession> {
+  const res = await fetch(`${API_URL}/auth/demo`, { method: "POST" });
+  if (!res.ok) throw new Error("Demo login failed");
+  const data = (await res.json()) as { token: string; name: string; email: string; learner_id: string };
+  setToken(data.token);
+  const session = { name: data.name, email: data.email, learnerId: data.learner_id };
+  saveAuth(session);
+  return session;
+}
+
+export async function completeTokenLogin(token: string): Promise<AuthSession> {
+  setToken(token);
+  const res = await fetch(`${API_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Invalid session");
+  const data = (await res.json()) as { name: string; email: string; learner_id: string };
+  const session = { name: data.name, email: data.email, learnerId: data.learner_id };
+  saveAuth(session);
+  return session;
+}
+
+export function hasBackendSession(): boolean {
+  return Boolean(getToken());
 }

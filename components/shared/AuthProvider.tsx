@@ -1,7 +1,6 @@
 "use client";
 
-import { SessionProvider } from "next-auth/react";
-
+/** Passthrough — auth is FastAPI JWT in localStorage (no NextAuth). */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  return <SessionProvider>{children}</SessionProvider>;
+  return <>{children}</>;
 }

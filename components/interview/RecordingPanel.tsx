@@ -1,186 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, CameraOff, Mic, Timer as TimerIcon, ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
-import { languageToSarvamCode } from "@/lib/sarvamLanguage";
-import { downsample, encodeWav, mergeFloat32 } from "@/lib/pcmWav";
-import type { Language, RoundQuestion } from "@/lib/types";
+import type { RoundQuestion } from "@/lib/types";
 
-const FLUSH_MS = 2200;
-const TARGET_RATE = 16000;
-
-async function transcribeWav(blob: Blob, languageCode: string): Promise<string> {
-  const body = new FormData();
-  body.append("file", new File([blob], "speech.wav", { type: "audio/wav" }));
-  body.append("language_code", languageCode);
-  const res = await fetch("/api/stt", { method: "POST", body });
-  const data = (await res.json()) as { transcript?: string; error?: string };
-  if (!res.ok) throw new Error(data.error || "Transcription failed.");
-  return data.transcript?.trim() || "";
+export interface RecordingSubmitPayload {
+  audioBlob: Blob;
+  videoBlob?: Blob | null;
+  transcript?: string;
 }
 
 export function RecordingPanel({
   question,
   transcript,
-  language,
   onSubmit,
 }: {
   question: RoundQuestion;
+  /** When set, uses mock typed transcript (debate/impromptu P1) instead of live upload. */
   transcript?: string;
-  language?: Language;
-  onSubmit: (transcript: string) => void;
+  language?: string;
+  onSubmit: (payload: RecordingSubmitPayload) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioStreamRef = useRef<MediaStream | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const pcmChunksRef = useRef<Float32Array[]>([]);
-  const keepRecordingRef = useRef(false);
-  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const finishingRef = useRef(false);
-  const flushBusyRef = useRef(false);
-  const transcriptScrollRef = useRef<HTMLDivElement>(null);
-  const liveTranscriptRef = useRef("");
+  const mockMode = Boolean(transcript);
 
   const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
-  const [phase, setPhase] = useState<"ready" | "recording" | "transcribing" | "recorded">("ready");
-  const [liveTranscript, setLiveTranscript] = useState("");
-  const [typedTranscript, setTypedTranscript] = useState("");
+  const [phase, setPhase] = useState<"ready" | "recording" | "recorded">("ready");
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(question.timeLimitSeconds ?? 0);
-
-  const useLiveStt = !transcript;
-  const languageCode = languageToSarvamCode(language);
-
-  const appendTranscript = useCallback((piece: string) => {
-    if (!piece) return;
-    const next = liveTranscriptRef.current ? `${liveTranscriptRef.current} ${piece}` : piece;
-    liveTranscriptRef.current = next;
-    setLiveTranscript(next);
-  }, []);
-
-  const flushPcm = useCallback(async () => {
-    const chunks = pcmChunksRef.current;
-    pcmChunksRef.current = [];
-    if (!chunks.length) return;
-
-    const ctx = audioCtxRef.current;
-    const merged = mergeFloat32(chunks);
-    const pcm = downsample(merged, ctx?.sampleRate || TARGET_RATE, TARGET_RATE);
-    if (pcm.length < TARGET_RATE * 0.35) return;
-
-    const wav = encodeWav(pcm, TARGET_RATE);
-    const text = await transcribeWav(wav, languageCode);
-    appendTranscript(text);
-  }, [appendTranscript, languageCode]);
-
-  const stopMicGraph = useCallback(() => {
-    processorRef.current?.disconnect();
-    sourceRef.current?.disconnect();
-    processorRef.current = null;
-    sourceRef.current = null;
-    void audioCtxRef.current?.close();
-    audioCtxRef.current = null;
-  }, []);
-
-  async function finishRecording() {
-    if (finishingRef.current) return;
-    finishingRef.current = true;
-    keepRecordingRef.current = false;
-    if (flushTimerRef.current) {
-      clearInterval(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
-    if (!useLiveStt) {
-      setTypedTranscript(transcript || "");
-      setPhase("recorded");
-      return;
-    }
-    setPhase("transcribing");
-    try {
-      while (flushBusyRef.current) {
-        await new Promise((r) => setTimeout(r, 40));
-      }
-      await flushPcm();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not transcribe speech.");
-    }
-    stopMicGraph();
-    setPhase("recorded");
-  }
-
-  async function startLiveCapture() {
-    const audioStream = audioStreamRef.current;
-    if (!audioStream || audioStream.getAudioTracks().length === 0) {
-      throw new Error("Microphone is not available.");
-    }
-
-    const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) throw new Error("This browser cannot capture microphone audio.");
-
-    const ctx = new AudioCtx();
-    await ctx.resume();
-    const source = ctx.createMediaStreamSource(audioStream);
-    const processor = ctx.createScriptProcessor(4096, 1, 1);
-    const silence = ctx.createGain();
-    silence.gain.value = 0;
-
-    processor.onaudioprocess = (event) => {
-      if (!keepRecordingRef.current) return;
-      pcmChunksRef.current.push(new Float32Array(event.inputBuffer.getChannelData(0)));
-    };
-
-    source.connect(processor);
-    processor.connect(silence);
-    silence.connect(ctx.destination);
-
-    audioCtxRef.current = ctx;
-    sourceRef.current = source;
-    processorRef.current = processor;
-  }
-
-  function startRecording() {
-    setError(null);
-    finishingRef.current = false;
-    setSecondsLeft(question.timeLimitSeconds ?? 0);
-
-    if (!useLiveStt) {
-      setTypedTranscript("");
-      setPhase("recording");
-      return;
-    }
-
-    liveTranscriptRef.current = "";
-    setLiveTranscript("");
-    pcmChunksRef.current = [];
-    keepRecordingRef.current = true;
-
-    void (async () => {
-      try {
-        await startLiveCapture();
-        setPhase("recording");
-        flushTimerRef.current = setInterval(() => {
-          if (!keepRecordingRef.current || flushBusyRef.current) return;
-          flushBusyRef.current = true;
-          void flushPcm()
-            .catch((err) => setError(err instanceof Error ? err.message : "Could not transcribe speech."))
-            .finally(() => {
-              flushBusyRef.current = false;
-            });
-        }, FLUSH_MS);
-      } catch (err) {
-        keepRecordingRef.current = false;
-        setError(err instanceof Error ? err.message : "Could not start the microphone.");
-      }
-    })();
-  }
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [typedTranscript, setTypedTranscript] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -193,7 +52,6 @@ export function RecordingPanel({
           return;
         }
         streamRef.current = stream;
-        audioStreamRef.current = new MediaStream(stream.getAudioTracks());
         if (videoRef.current) videoRef.current.srcObject = stream;
         setCameraState("live");
       } catch {
@@ -204,7 +62,6 @@ export function RecordingPanel({
             return;
           }
           streamRef.current = audioOnly;
-          audioStreamRef.current = audioOnly;
           setCameraState("unavailable");
         } catch {
           if (!cancelled) setCameraState("unavailable");
@@ -213,21 +70,16 @@ export function RecordingPanel({
     };
 
     if (typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function") {
-      startCamera();
+      void startCamera();
     } else {
       setCameraState("unavailable");
     }
 
     return () => {
       cancelled = true;
-      keepRecordingRef.current = false;
-      if (flushTimerRef.current) clearInterval(flushTimerRef.current);
-      processorRef.current?.disconnect();
-      sourceRef.current?.disconnect();
-      void audioCtxRef.current?.close();
+      mediaRecorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
-      audioStreamRef.current = null;
     };
   }, []);
 
@@ -237,19 +89,25 @@ export function RecordingPanel({
     }
   }, [cameraState]);
 
-  useEffect(() => {
-    if (phase !== "recording" || !question.timeLimitSeconds) return;
-    if (secondsLeft <= 0) {
-      void finishRecording();
+  function finishRecording() {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      setPhase("recorded");
       return;
     }
-    const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, secondsLeft]);
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+      setAudioBlob(blob);
+      if (cameraState === "live") setVideoBlob(blob);
+      setPhase("recorded");
+    };
+    recorder.stop();
+  }
 
   useEffect(() => {
-    if (useLiveStt || phase !== "recording" || !transcript) return;
+    if (!mockMode || phase !== "recording" || !transcript) return;
     setTypedTranscript("");
     let i = 0;
     const speed = question.timeLimitSeconds ? 14 : 22;
@@ -258,31 +116,115 @@ export function RecordingPanel({
       setTypedTranscript(transcript.slice(0, i));
       if (i >= transcript.length) {
         clearInterval(interval);
+        const empty = new Blob([new Uint8Array(1024)], { type: "audio/webm" });
+        setAudioBlob(empty);
         setPhase("recorded");
       }
     }, speed);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, useLiveStt, transcript]);
+  }, [phase, mockMode, transcript, question.timeLimitSeconds]);
+
+  function pickRecorderMime(hasVideo: boolean): string | undefined {
+    const candidates = hasVideo
+      ? [
+          "video/webm;codecs=vp8,opus",
+          "video/webm;codecs=vp9,opus",
+          "video/webm",
+          "video/mp4",
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/mp4",
+        ]
+      : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+    for (const mime of candidates) {
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(mime)) return mime;
+    }
+    return undefined;
+  }
+
+  function startRecording() {
+    setError(null);
+    finishingRef.current = false;
+    setSecondsLeft(question.timeLimitSeconds ?? 0);
+    setAudioBlob(null);
+    setVideoBlob(null);
+    chunksRef.current = [];
+
+    if (mockMode) {
+      setTypedTranscript("");
+      setPhase("recording");
+      return;
+    }
+
+    const stream = streamRef.current;
+    if (!stream || stream.getAudioTracks().length === 0) {
+      const empty = new Blob([new Uint8Array(2048)], { type: "audio/webm" });
+      setAudioBlob(empty);
+      setPhase("recorded");
+      setError("No microphone — submitting a placeholder clip for stub analysis.");
+      return;
+    }
+
+    // Ensure mic tracks are live (preview may leave them muted on some browsers).
+    stream.getAudioTracks().forEach((t) => {
+      t.enabled = true;
+    });
+
+    // Audio-only stream for MediaRecorder — mixing video+audio tracks with an
+    // audio/* mimeType often throws "error starting the MediaRecorder" in Chrome.
+    const audioOnly = new MediaStream(stream.getAudioTracks());
+    const mime = pickRecorderMime(false);
+
+    const tryStart = (source: MediaStream, mimeType?: string) => {
+      const recorder = mimeType ? new MediaRecorder(source, { mimeType }) : new MediaRecorder(source);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onerror = () => {
+        setError("Recorder error — try End response, or refresh and use Submit with a placeholder.");
+      };
+      recorder.start(250);
+      setPhase("recording");
+    };
+
+    try {
+      tryStart(audioOnly, mime);
+    } catch {
+      try {
+        // Retry with browser default mime on audio-only stream
+        tryStart(audioOnly, undefined);
+      } catch {
+        try {
+          // Last resort: full A/V stream + video mime
+          tryStart(stream, pickRecorderMime(true));
+        } catch (err) {
+          const empty = new Blob([new Uint8Array(2048)], { type: "audio/webm" });
+          setAudioBlob(empty);
+          setPhase("recorded");
+          setError(
+            err instanceof Error
+              ? `${err.message} — using placeholder clip so you can still submit.`
+              : "Recorder failed — using placeholder clip so you can still submit.",
+          );
+        }
+      }
+    }
+  }
 
   useEffect(() => {
-    if (transcriptScrollRef.current) {
-      transcriptScrollRef.current.scrollTop = transcriptScrollRef.current.scrollHeight;
+    if (phase !== "recording" || !question.timeLimitSeconds) return;
+    if (secondsLeft <= 0) {
+      finishRecording();
+      return;
     }
-  }, [liveTranscript, typedTranscript]);
+    const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, secondsLeft]);
 
   const timerPct = question.timeLimitSeconds ? (secondsLeft / question.timeLimitSeconds) * 100 : 100;
   const timerDanger = question.timeLimitSeconds ? secondsLeft <= 5 : false;
-
-  const shownTranscript = useLiveStt ? liveTranscript : typedTranscript;
-  const responseText =
-    phase === "ready"
-      ? "Your response will appear here as you speak…"
-      : useLiveStt && phase === "recording" && !shownTranscript
-        ? "Listening…"
-        : useLiveStt && phase === "transcribing" && !shownTranscript
-          ? "Transcribing your answer…"
-          : shownTranscript;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-[1fr_1.15fr]">
@@ -315,7 +257,7 @@ export function RecordingPanel({
             )}
             <span className="flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[11px] text-white/80 backdrop-blur-sm">
               <Camera size={10} />
-              {cameraState === "live" ? "Live" : "Demo"}
+              {cameraState === "live" ? "Live" : "Mic"}
             </span>
           </div>
 
@@ -370,18 +312,18 @@ export function RecordingPanel({
             <Mic size={12} />
             Response
           </div>
-          <div
-            ref={transcriptScrollRef}
-            className="max-h-[140px] min-h-[56px] overflow-y-auto scroll-smooth text-sm leading-relaxed text-ink-soft sm:max-h-[180px] sm:min-h-[64px]"
-          >
-            {phase === "ready" ? (
-              <span className="text-muted">{responseText}</span>
+          <div className="min-h-[56px] text-sm leading-relaxed text-ink-soft sm:min-h-[64px]">
+            {mockMode ? (
+              phase === "ready" ? (
+                <span className="text-muted">Your response will appear here as you speak…</span>
+              ) : (
+                typedTranscript || (phase === "recording" ? "…" : "")
+              )
             ) : (
               <>
-                {responseText}
-                {(phase === "recording" || phase === "transcribing") && (
-                  <span className="animate-pulse-soft">▍</span>
-                )}
+                {phase === "ready" && <span className="text-muted">Press start — audio uploads to Pitchground for scoring.</span>}
+                {phase === "recording" && <span>Recording… transcript arrives after analysis.</span>}
+                {phase === "recorded" && <span>Ready to submit. Backend will transcribe and score this clip.</span>}
               </>
             )}
           </div>
@@ -391,13 +333,7 @@ export function RecordingPanel({
         <div className="mt-4 flex justify-end sm:mt-5">
           <AnimatePresence mode="wait">
             {phase === "ready" && (
-              <motion.div
-                key="start"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="w-full sm:w-auto"
-              >
+              <motion.div key="start" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full sm:w-auto">
                 <Button size="lg" onClick={startRecording} className="w-full sm:w-auto">
                   <Mic size={16} />
                   Start answering
@@ -405,42 +341,25 @@ export function RecordingPanel({
               </motion.div>
             )}
             {phase === "recording" && (
-              <motion.div
-                key="stop"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="w-full sm:w-auto"
-              >
-                <Button size="lg" variant="outline" onClick={() => void finishRecording()} className="w-full sm:w-auto">
+              <motion.div key="stop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full sm:w-auto">
+                <Button size="lg" variant="outline" onClick={finishRecording} className="w-full sm:w-auto">
                   End response
                 </Button>
               </motion.div>
             )}
-            {phase === "transcribing" && (
-              <motion.div
-                key="transcribing"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="w-full sm:w-auto"
-              >
-                <Button size="lg" disabled className="w-full sm:w-auto">
-                  Transcribing…
-                </Button>
-              </motion.div>
-            )}
             {phase === "recorded" && (
-              <motion.div
-                key="submit"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full sm:w-auto"
-              >
+              <motion.div key="submit" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="w-full sm:w-auto">
                 <Button
                   size="lg"
-                  disabled={useLiveStt && !liveTranscript}
-                  onClick={() => onSubmit(useLiveStt ? liveTranscript : transcript || typedTranscript)}
+                  disabled={!audioBlob}
+                  onClick={() =>
+                    audioBlob &&
+                    onSubmit({
+                      audioBlob,
+                      videoBlob,
+                      transcript: mockMode ? transcript || typedTranscript : undefined,
+                    })
+                  }
                   className="w-full sm:w-auto"
                 >
                   Submit response
