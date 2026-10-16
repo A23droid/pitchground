@@ -7,7 +7,15 @@ from app.services.stt_sarvam import SarvamTranscriber
 
 
 def get_transcriber() -> TranscriberProtocol:
+    if ML_ANALYZER == "real":
+        try:
+            from app.ml.local_transcriber import LocalWhisperTranscriber  # type: ignore
+
+            return LocalWhisperTranscriber()
+        except Exception:
+            return SarvamTranscriber()
     return SarvamTranscriber()
+
 
 
 def get_analyzer() -> AttemptAnalyzerProtocol:
@@ -19,3 +27,8 @@ def get_analyzer() -> AttemptAnalyzerProtocol:
         except Exception:
             return StubAnalyzer()
     return StubAnalyzer()
+
+
+# ── Canonical public aliases (preferred over get_* names) ─────────────────
+build_transcriber = get_transcriber
+build_analyzer = get_analyzer

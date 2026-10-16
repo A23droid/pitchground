@@ -17,6 +17,55 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
   const contentScore = pct(content.coverage ?? fused.content);
   const overall = Math.round((structure + fluency + composure + presence + contentScore) / 5);
 
+  // Compute camera stress level (0-100) based on freeze ratio, gaze instability, and vocal tremor
+  const freezeRatio = visual?.freeze_ratio ?? 0.05;
+  const gazeAway = visual?.gaze_away ?? 0.1;
+  const energyVar = acoustic?.energy_var ?? 0.1;
+  const stressRaw = (freezeRatio * 0.4 + gazeAway * 0.35 + Math.min(1.0, energyVar * 2) * 0.25) * 100;
+  const stressScore = Math.min(100, Math.max(0, Math.round(stressRaw)));
+
+  // Generate actionable improvement suggestions based on ML metrics
+  const improvements: string[] = [];
+  const wpm = acoustic.wpm ?? 120;
+  const fillerRate = acoustic.filler_rate ?? 0;
+  const pauseRatio = acoustic.pause_ratio ?? 0.15;
+
+  if (fillerRate > 6) {
+    improvements.push(`High conversational filler rate (${fillerRate.toFixed(1)}%). Practice substituting deliberate 1-second pauses instead of vocalizing 'um', 'uh', or 'basically'.`);
+  } else if (fillerRate > 3) {
+    improvements.push(`Moderate filler frequency detected (${fillerRate.toFixed(1)}%). Aim to speak in concise, single-idea sentences.`);
+  }
+
+  if (wpm > 165) {
+    improvements.push(`Speaking pace is fast (${Math.round(wpm)} WPM). Modulate your delivery closer to 130–150 WPM to project control.`);
+  } else if (wpm < 105) {
+    improvements.push(`Cadence is measured (${Math.round(wpm)} WPM). Slightly increase pacing to convey energy and enthusiasm.`);
+  }
+
+  if (pauseRatio > 0.28) {
+    improvements.push(`Elevated hesitation pauses (${Math.round(pauseRatio * 100)}% of time). Pre-structuring responses with the STAR or PREP framework reduces searching for words.`);
+  }
+
+  if (visual) {
+    if (gazeAway > 0.25) {
+      improvements.push("Camera gaze shifted frequently. Center your focus on the camera lens to project direct conviction.");
+    }
+    if ((visual.head_down ?? 0) > 0.25) {
+      improvements.push("Head tilt angle drifted downward. Keep your posture aligned with the frame.");
+    }
+    if ((visual.gesture_energy ?? 0.4) < 0.2) {
+      improvements.push("Body posture was rigid. Natural, open hand gestures help emphasize key architectural trade-offs.");
+    }
+  }
+
+  if (content.coverage !== undefined && content.coverage < 0.6) {
+    improvements.push("Some core prompt key points were omitted. Be sure to explicitly name fundamental concepts and architectural implications.");
+  }
+
+  if (improvements.length === 0) {
+    improvements.push("Strong, well-structured delivery! Maintain this balanced cadence and posture in subsequent rounds.");
+  }
+
   return {
     attemptId,
     content: {
@@ -31,15 +80,20 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
       fluency,
     },
     voice: {
-      speakingRateWpm: Math.round(acoustic.wpm ?? 120),
+      speakingRateWpm: Math.round(wpm),
       fillerCount: Math.round(acoustic.filler_rate ?? 2),
-      pauseCount: Math.round((acoustic.pause_ratio ?? 0.15) * 10),
-      responseLatencySeconds: Number(((acoustic.pause_ratio ?? 0.15) * 2).toFixed(1)),
+      fillerRatePercent: Number(fillerRate.toFixed(1)),
+      pauseCount: Math.round(pauseRatio * 10),
+      pauseRatioPercent: Math.round(pauseRatio * 100),
+      responseLatencySeconds: Number((pauseRatio * 2).toFixed(1)),
     },
     visual: {
-      gaze: visual ? pct(1 - (visual.gaze_away ?? 0.1)) : 70,
-      posture: visual ? pct(1 - (visual.head_down ?? 0.1)) : 70,
-      engagement: visual ? pct(visual.gesture_energy ?? 0.4) : 65,
+      gaze: visual ? pct(1 - (visual.gaze_away ?? 0.1)) : 75,
+      posture: visual ? pct(1 - (visual.head_down ?? 0.1)) : 75,
+      engagement: visual ? pct(visual.gesture_energy ?? 0.4) : 70,
+      stressScore,
+      eyeContactScore: visual ? pct(1 - (visual.gaze_away ?? 0.1)) : 75,
+      handGestureScore: visual ? pct(visual.gesture_energy ?? 0.4) : 70,
     },
     language: {
       primaryLanguage: language.primary === "hi" ? "Hindi" : language.primary === "mixed" ? "Mixed" : "English",
@@ -47,6 +101,7 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
       englishArticulation: pct(language.primary_ratio ?? fused.language_stability, 0.8),
     },
     overallScore: overall,
+    improvements,
   };
 }
 
