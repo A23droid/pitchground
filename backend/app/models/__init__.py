@@ -1,3 +1,4 @@
+from app.models.user import User
 from app.models.entities import (
     Attempt,
     AttemptMetrics,
@@ -17,6 +18,7 @@ from app.models.entities import (
 )
 
 __all__ = [
+    "User",
     "Learner",
     "Session",
     "SessionEvent",

@@ -28,7 +28,8 @@ Do **not** point local `.env` URLs at production unless intentional.
 |----------|-------|
 | `FRONTEND_URL` | `https://pitch-ground.vercel.app` |
 | `BACKEND_URL` | `https://pitchground-backend.onrender.com` |
-| secrets | `GOOGLE_*`, `JWT_SECRET`, `SARVAM_*`, `OPENAI_*`, Nhost vars |
+| secrets | `GOOGLE_*`, `JWT_SECRET`, `SARVAM_*`, `OPENAI_*`, Nhost vars, `RESEND_API_KEY` |
+| `RESEND_FROM_EMAIL` | verified sender, e.g. `Pitchground <noreply@yourdomain.com>` |
 | `DATABASE_URL` | same Nhost Postgres URI |
 | `STORAGE_BACKEND` | `nhost` |
 | `ML_ANALYZER` | `stub` until teammate model ships |

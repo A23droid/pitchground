@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { ArrowLeft, Mail } from "lucide-react";
+import { API_URL } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -21,14 +22,15 @@ export default function ForgotPasswordPage() {
     setSubmitting(true);
     setErrorMsg("");
     try {
-      const res = await fetch("http://localhost:8000/auth/forgot-password", {
+      const res = await fetch(`${API_URL}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Failed to request password reset");
+        const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
+        throw new Error(detail || `Could not send reset link (${res.status})`);
       }
       setSuccess(true);
     } catch (err: any) {

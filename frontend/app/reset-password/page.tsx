@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { Lock } from "lucide-react";
+import { API_URL } from "@/lib/api";
 
 export default function ResetPasswordPage() {
   return (
@@ -35,7 +36,7 @@ function ResetPasswordForm() {
     setSubmitting(true);
     setErrorMsg("");
     try {
-      const res = await fetch("http://localhost:8000/auth/reset-password", {
+      const res = await fetch(`${API_URL}/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, new_password: password }),
