@@ -14,17 +14,13 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Learner
+from app.email_service import send_password_reset_email
+from app.models import Learner, User
 from app.models.entities import Learner as LearnerModel
+from app.schemas.auth import ForgotPassword, ResetPassword, UserCreate, UserLogin
+from app.security import generate_reset_token, get_password_hash, verify_password
 
-try:
-    from app.models import User
-    from app.schemas import ForgotPassword, ResetPassword, Token, UserCreate, UserLogin
-    from app.security import generate_reset_token, get_password_hash, verify_password
-    from app.email_service import send_password_reset_email
-    HAS_USER_AUTH = True
-except Exception:
-    HAS_USER_AUTH = False
+HAS_USER_AUTH = True
 
 load_dotenv()
 
