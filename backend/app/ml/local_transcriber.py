@@ -47,8 +47,8 @@ class LocalWhisperTranscriber(TranscriberProtocol):
             return Transcript(text="", language="unknown", confidence=None, segments=[])
 
         lang = None if language_hint in ("auto", "unknown", "", None) else language_hint
-        # Prime the decoder vocabulary to retain fillers and hesitations
-        initial_prompt = "Um, uh, ahh, hmm, like, you know, actually, basically, err, matlab, yaar..."
+        # Prime the decoder vocabulary to retain fillers and hesitations in English + Indian languages
+        initial_prompt = "Um, uh, ahh, hmm, like, you know, actually, basically, err, matlab, yaar, aur, toh, bas, haan, nahi..."
 
         try:
             segments_iter, info = model.transcribe(
@@ -58,15 +58,16 @@ class LocalWhisperTranscriber(TranscriberProtocol):
                 suppress_tokens=[],           # Do NOT suppress disfluencies
                 word_timestamps=True,
                 vad_filter=False,             # Do not cut out hesitation breaths
-                beam_size=3,
-                best_of=3,
+                beam_size=5,                  # Higher = more accurate filler detection
+                best_of=5,
                 temperature=0.0,
             )
 
             segments: list[TranscriptSegment] = []
             full_text_parts: list[str] = []
 
-            detected_lang = "hi" if info.language == "hi" else "en" if info.language == "en" else "unknown"
+            # Pass through the actual detected language — supports en, hi, gu, ta, te, mr, kn, etc.
+            detected_lang = info.language or "unknown"
 
             for seg in segments_iter:
                 seg_text = seg.text.strip()
