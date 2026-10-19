@@ -19,7 +19,7 @@ export default function RecoveryTrainingPage() {
   const [stage, setStage] = useState<Stage>("intro");
   const [result, setResult] = useState<RecoveryResult | null>(null);
   const [userTranscript, setUserTranscript] = useState<string>("");
-  const [userLatency, setUserLatency] = useState<number>(2.1);
+  const [userLatency, setUserLatency] = useState<number>(0);
 
   return (
     <div className="mx-auto mt-8 w-full max-w-3xl px-4 sm:px-6">

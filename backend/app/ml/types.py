@@ -71,6 +71,7 @@ class VisualSignals(BaseModel):
     head_down: float = 0.0
     freeze_ratio: float = 0.0
     gesture_energy: float = 0.0
+    stress_score: float = 0.0
 
 
 class ContentSignals(BaseModel):

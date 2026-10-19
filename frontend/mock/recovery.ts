@@ -12,7 +12,7 @@ export function generateRecoveryResult(
   transcript?: string,
   measuredLatencySeconds?: number,
 ): RecoveryResult {
-  const text = transcript || recoveryTranscript;
+  const text = transcript !== undefined ? transcript : recoveryTranscript;
   const parts = text.split(" ... [interrupted] ... ");
   const preText = parts[0] || "";
   const postText = parts[1] || "";
@@ -20,16 +20,26 @@ export function generateRecoveryResult(
   const preWords = preText.trim().split(/\s+/).filter(Boolean);
   const postWords = postText.trim().split(/\s+/).filter(Boolean);
 
+  if (preWords.length === 0 && postWords.length === 0) {
+    return {
+      preInterruption: { structure: 0, fluency: 0 },
+      postInterruption: { structure: 0, fluency: 0 },
+      recoverySeconds: measuredLatencySeconds !== undefined ? Number(measuredLatencySeconds.toFixed(1)) : 0,
+      relevanceMaintained: false,
+      verdict: "weak-recovery",
+    };
+  }
+
   const preFillers = (preText.match(/\b(uh+|um+|ah+|eh+|er+|mm+|hmm+|like|you know)\b/gi) || []).length;
   const postFillers = (postText.match(/\b(uh+|um+|ah+|eh+|er+|mm+|hmm+|like|you know)\b/gi) || []).length;
 
-  const preStructure = Math.min(100, Math.max(40, Math.round(Math.min(50, preWords.length * 1.6) + 40)));
-  const preFluency = Math.min(100, Math.max(35, Math.round(100 - (preFillers / Math.max(1, preWords.length)) * 120)));
+  const preStructure = preWords.length > 0 ? Math.min(100, Math.max(15, Math.round(Math.min(50, preWords.length * 1.6) + 30))) : 0;
+  const preFluency = preWords.length > 0 ? Math.min(100, Math.max(15, Math.round(100 - (preFillers / preWords.length) * 120))) : 0;
 
-  const postStructure = Math.min(100, Math.max(30, Math.round(Math.min(50, postWords.length * 1.5) + 35)));
-  const postFluency = Math.min(100, Math.max(30, Math.round(100 - (postFillers / Math.max(1, postWords.length)) * 140)));
+  const postStructure = postWords.length > 0 ? Math.min(100, Math.max(15, Math.round(Math.min(50, postWords.length * 1.5) + 30))) : 0;
+  const postFluency = postWords.length > 0 ? Math.min(100, Math.max(15, Math.round(100 - (postFillers / postWords.length) * 140))) : 0;
 
-  const recoverySeconds = measuredLatencySeconds ? Number(measuredLatencySeconds.toFixed(1)) : 2.1;
+  const recoverySeconds = measuredLatencySeconds !== undefined ? Number(measuredLatencySeconds.toFixed(1)) : 0;
 
   // Check if post-interruption maintained topical relevance
   const preKeywords = new Set(preWords.map((w) => w.toLowerCase()).filter((w) => w.length > 3));

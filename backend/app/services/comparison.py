@@ -4,7 +4,10 @@ from app.ml.types import SignalBundle
 
 
 def compare_attempts(pressure: SignalBundle, retry: SignalBundle, focus: list[str] | None = None) -> dict:
-    focus = focus or ["fused.structure", "fused.fluency", "acoustic.pause_ratio", "acoustic.filler_rate"]
+    if focus is None:
+        focus = ["fused.structure", "fused.fluency", "acoustic.pause_ratio", "acoustic.filler_rate"]
+        if pressure.visual is not None or retry.visual is not None:
+            focus = focus + ["visual.gaze_away", "visual.freeze_ratio"]
     rows = []
     improved_flags = []
 
@@ -17,8 +20,8 @@ def compare_attempts(pressure: SignalBundle, retry: SignalBundle, focus: list[st
         a = get(pressure, metric)
         b = get(retry, metric)
         delta = b - a
-        # For pause/filler, lower is better
-        if "pause" in metric or "filler" in metric:
+        # For pause/filler/gaze/freeze/stress, lower is better
+        if any(neg in metric for neg in ("pause", "filler", "gaze", "freeze", "stress")):
             verdict = "improved" if delta < -0.05 else "worsened" if delta > 0.05 else "unchanged"
         else:
             verdict = "improved" if delta > 0.05 else "worsened" if delta < -0.05 else "unchanged"

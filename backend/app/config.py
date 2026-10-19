@@ -53,7 +53,7 @@ CORS_ORIGINS = [
     o.strip()
     for o in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,https://pitch-ground.vercel.app",
+        "http://localhost:3000,http://127.0.0.1:3000,https://pitch-ground.vercel.app",
     ).split(",")
     if o.strip()
 ]

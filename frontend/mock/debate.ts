@@ -190,7 +190,7 @@ export function generateDebateAnalysis(config: DebateConfig, rounds?: DebateRoun
   const causalHits = (openingText.match(causalRegex) || []).length;
   const openingDepthScore = Math.min(45, openWordCount * 0.6);
   const openingLogicScore = Math.min(35, causalHits * 7);
-  const openingScore = openWordCount > 0 ? Math.min(100, Math.max(35, Math.round(openingDepthScore + openingLogicScore + 20))) : 75;
+  const openingScore = openWordCount > 0 ? Math.min(100, Math.max(15, Math.round(openingDepthScore + openingLogicScore + 15))) : 0;
 
   // 2. Rebuttal argument scoring (counter-premise refutation, contrast tokens, direct address)
   const rebutWords = rebuttalText.trim().split(/\s+/).filter(Boolean);
@@ -207,7 +207,7 @@ export function generateDebateAnalysis(config: DebateConfig, rounds?: DebateRoun
   const rebuttalDepthScore = Math.min(40, rebutWordCount * 0.7);
   const rebuttalRefuteScore = Math.min(35, refutationHits * 9);
   const rebuttalTargetScore = Math.min(25, premiseOverlap * 6);
-  const rebuttalScore = rebutWordCount > 0 ? Math.min(100, Math.max(30, Math.round(rebuttalDepthScore + rebuttalRefuteScore + rebuttalTargetScore))) : 55;
+  const rebuttalScore = rebutWordCount > 0 ? Math.min(100, Math.max(15, Math.round(rebuttalDepthScore + rebuttalRefuteScore + rebuttalTargetScore))) : 0;
 
   // 3. Composite dimensions
   const argumentation = Math.round(openingScore * 0.55 + rebuttalScore * 0.45);
@@ -216,12 +216,14 @@ export function generateDebateAnalysis(config: DebateConfig, rounds?: DebateRoun
   // 4. Communication: vocabulary diversity across all user speeches
   const allWords = [...openWords, ...rebutWords];
   const uniqueWords = new Set(allWords.map((w) => w.toLowerCase()));
-  const typeTokenRatio = allWords.length > 0 ? uniqueWords.size / allWords.length : 0.65;
-  const communication = Math.min(100, Math.max(40, Math.round(typeTokenRatio * 55 + Math.min(45, allWords.length * 0.35))));
+  const typeTokenRatio = allWords.length > 0 ? uniqueWords.size / allWords.length : 0.0;
+  const communication = allWords.length > 0 ? Math.min(100, Math.max(15, Math.round(typeTokenRatio * 55 + Math.min(45, allWords.length * 0.35)))) : 0;
 
   // 5. Pressure handling: retention of fluency between opening and rebuttal
   const fluencyDelta = openingScore - rebuttalScore;
-  const pressureHandling = Math.min(100, Math.max(35, Math.round(100 - Math.max(0, fluencyDelta) * 1.3)));
+  const pressureHandling = (openWordCount > 0 && rebutWordCount > 0)
+    ? Math.min(100, Math.max(20, Math.round(100 - Math.max(0, fluencyDelta) * 1.3)))
+    : (openWordCount > 0 ? 50 : 0);
 
   // 6. Language fidelity & code-switching
   const allText = `${openingText} ${rebuttalText}`;
@@ -229,12 +231,12 @@ export function generateDebateAnalysis(config: DebateConfig, rounds?: DebateRoun
   const indicCount = (allText.match(/[\u0900-\u0D7F]/g) || []).length;
   const totalChars = Math.max(1, latinCount + indicCount);
   const codeSwitchingRatio = isMultilingual ? Math.min(100, Math.round((latinCount / totalChars) * 100)) : 0;
-  const languageFidelity = isMultilingual ? Math.min(100, Math.max(50, Math.round((indicCount / totalChars) * 100))) : 90;
+  const languageFidelity = isMultilingual ? (totalChars > 1 ? Math.min(100, Math.max(10, Math.round((indicCount / totalChars) * 100))) : 0) : 100;
 
   // 7. Overall score
-  const overallScore = Math.round(
-    0.30 * argumentation + 0.30 * rebuttal + 0.20 * communication + 0.20 * pressureHandling,
-  );
+  const overallScore = (openWordCount > 0 || rebutWordCount > 0)
+    ? Math.round(0.30 * argumentation + 0.30 * rebuttal + 0.20 * communication + 0.20 * pressureHandling)
+    : 0;
 
   const keyObservation =
     rebuttalScore >= openingScore - 8

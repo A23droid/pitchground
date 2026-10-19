@@ -22,7 +22,7 @@ export function InterruptionRecordingPanel({
   const [phase, setPhase] = useState<"ready" | "typing-before" | "interrupted" | "typing-after" | "done">("ready");
   const [typed, setTyped] = useState("");
   const [interruptTimestamp, setInterruptTimestamp] = useState<number | null>(null);
-  const [measuredLatency, setMeasuredLatency] = useState<number>(2.1);
+  const [measuredLatency, setMeasuredLatency] = useState<number>(0);
 
   useEffect(() => {
     if (phase !== "typing-before") return;

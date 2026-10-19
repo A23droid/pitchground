@@ -89,12 +89,30 @@ export function generateImpromptuAnalysis(
   const words = (transcript || "").trim().split(/\s+/).filter(Boolean);
   const totalWords = words.length;
 
+  if (totalWords === 0) {
+    return {
+      fluencyTimeline: [5, 15, 25, 35, 45, Math.min(60, duration)].map((sec) => ({
+        second: sec,
+        wpm: 0,
+        fillerDensity: 0,
+        repetitionCount: 0,
+      })),
+      initialWpm: 0,
+      finalWpm: 0,
+      repetitionCount: 0,
+      fillerCount: 0,
+      coherence: 0,
+      lexicalDiversity: 0,
+      overallScore: 0,
+      language: config.language,
+      codeSwitchingDetected: false,
+    };
+  }
+
   // 1. Measured WPM
   const measuredWpm = sttMetrics?.wpm && sttMetrics.wpm > 0
     ? Math.round(sttMetrics.wpm)
-    : totalWords > 0
-    ? Math.min(220, Math.max(30, Math.round(totalWords / durMin)))
-    : 125;
+    : Math.min(220, Math.max(30, Math.round(totalWords / durMin)));
 
   // 2. Real fillers
   const fillerRegex = /\b(uh+|um+|ah+|eh+|er+|mm+|hmm+|like|you know|basically|so to say)\b/gi;
@@ -114,7 +132,7 @@ export function generateImpromptuAnalysis(
 
   // 4. Lexical diversity (Type-Token Ratio)
   const uniqueWords = new Set(words.map((w) => w.toLowerCase().replace(/[^a-z0-9]/gi, "")).filter(Boolean));
-  const lexicalDiversity = totalWords > 0 ? Math.min(100, Math.max(25, Math.round((uniqueWords.size / totalWords) * 100))) : 60;
+  const lexicalDiversity = Math.min(100, Math.max(15, Math.round((uniqueWords.size / totalWords) * 100)));
 
   // 5. Pacing progression (first half vs second half)
   const mid = Math.floor(totalWords / 2);
@@ -132,7 +150,7 @@ export function generateImpromptuAnalysis(
   const coherence = Math.min(
     100,
     Math.max(
-      35,
+      15,
       Math.round(
         Math.min(45, totalWords * 0.5) +
         lexicalDiversity * 0.35 +
@@ -145,7 +163,7 @@ export function generateImpromptuAnalysis(
 
   // 7. Dynamic timeline points
   const stepSeconds = [5, 15, 25, 35, 45, Math.min(60, duration)];
-  const timeline: ImpromptuFluencyPoint[] = stepSeconds.map((sec, idx) => {
+  const timeline: ImpromptuFluencyPoint[] = stepSeconds.map((sec) => {
     const fraction = sec / duration;
     const currentWpm = Math.round(initialWpm + (finalWpm - initialWpm) * fraction);
     const currentFillers = Math.round(fillerCount * fraction);
@@ -159,7 +177,7 @@ export function generateImpromptuAnalysis(
   });
 
   // 8. Overall score calculation
-  const pacingScore = Math.max(25, Math.min(100, 100 - Math.abs(measuredWpm - 135) * 0.5 - fillerCount * 2));
+  const pacingScore = Math.max(15, Math.min(100, 100 - Math.abs(measuredWpm - 135) * 0.5 - fillerCount * 2));
   const overallScore = Math.round(0.35 * coherence + 0.35 * lexicalDiversity + 0.30 * pacingScore);
 
   return {
@@ -177,6 +195,19 @@ export function generateImpromptuAnalysis(
 }
 
 export function generateImpromptuDiagnosis(analysis: ImpromptuAnalysis): FailureDiagnosis {
+  if (analysis.overallScore === 0) {
+    return {
+      headline: "No speech detected during the recording session.",
+      explanation: "Pitchground did not detect audible speech in your impromptu response. Ensure your microphone is enabled and speak clearly throughout the prompt duration.",
+      deltas: [
+        { label: "Speaking pace", before: 0, after: 0, unit: "count", direction: "down-is-bad" },
+      ],
+      rootCause: "recovery-failure",
+      confidence: 0.95,
+      occurrences: 1,
+    };
+  }
+
   const wpmDrop = analysis.initialWpm - analysis.finalWpm;
 
   return {

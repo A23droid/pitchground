@@ -121,6 +121,7 @@ export default function ImpromptuPage() {
     }
   }
 
+  const [hasRecorded, setHasRecorded] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState<string>("");
   const [sttMetrics, setSttMetrics] = useState<{
     wpm: number;
@@ -131,6 +132,7 @@ export default function ImpromptuPage() {
   } | null>(null);
 
   async function handleSpeechSubmit(payload: RecordingSubmitPayload) {
+    setHasRecorded(true);
     setStage("analyzing");
     if (payload.audioBlob && payload.audioBlob.size > 200) {
       try {
@@ -153,7 +155,7 @@ export default function ImpromptuPage() {
   }
 
   async function onSpeechAnalyzed() {
-    const finalTranscript = liveTranscript || transcript;
+    const finalTranscript = hasRecorded ? liveTranscript : transcript;
     const res = await analyzeImpromptu(config, finalTranscript, sttMetrics);
     setAnalysisResult(res.analysis);
     setDiagnosisResult(res.diagnosis);

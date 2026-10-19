@@ -38,6 +38,8 @@ export default function LanguageDiagnosticPage() {
   const [englishTranscript, setEnglishTranscript] = useState<string>("");
   const [comfortableSttMetrics, setComfortableSttMetrics] = useState<any>(null);
   const [englishSttMetrics, setEnglishSttMetrics] = useState<any>(null);
+  const [hasRecordedComfortable, setHasRecordedComfortable] = useState(false);
+  const [hasRecordedEnglish, setHasRecordedEnglish] = useState(false);
 
   const comfortableQuestion: RoundQuestion = {
     id: "lang-comfortable",
@@ -69,6 +71,7 @@ export default function LanguageDiagnosticPage() {
   }
 
   async function handleComfortableSubmit(payload: RecordingSubmitPayload) {
+    setHasRecordedComfortable(true);
     setStage("comfortable-analyzing");
     if (payload.audioBlob && payload.audioBlob.size > 200) {
       try {
@@ -85,6 +88,7 @@ export default function LanguageDiagnosticPage() {
   }
 
   async function handleEnglishSubmit(payload: RecordingSubmitPayload) {
+    setHasRecordedEnglish(true);
     setStage("english-analyzing");
     if (payload.audioBlob && payload.audioBlob.size > 200) {
       try {
@@ -101,9 +105,10 @@ export default function LanguageDiagnosticPage() {
 
   async function onComfortableAnalyzed() {
     await delay(200);
+    const textToUse = hasRecordedComfortable ? comfortableTranscript : languageDiagnosticTranscripts.comfortable;
     const comfortable = generateComfortableLanguageAnalysis(
       language,
-      comfortableTranscript || languageDiagnosticTranscripts.comfortable,
+      textToUse,
       comfortableSttMetrics,
     );
     setComfortableResult(comfortable);
@@ -112,19 +117,22 @@ export default function LanguageDiagnosticPage() {
 
   async function onEnglishAnalyzed() {
     await delay(200);
+    const comfortableText = hasRecordedComfortable ? comfortableTranscript : languageDiagnosticTranscripts.comfortable;
+    const englishText = hasRecordedEnglish ? englishTranscript : languageDiagnosticTranscripts.english;
+
     const comfortable = comfortableResult || generateComfortableLanguageAnalysis(
       language,
-      comfortableTranscript || languageDiagnosticTranscripts.comfortable,
+      comfortableText,
       comfortableSttMetrics,
     );
     const english = generateEnglishAttemptAnalysis(
-      englishTranscript || languageDiagnosticTranscripts.english,
+      englishText,
       englishSttMetrics,
     );
     setComfortableResult(comfortable);
     setEnglishResult(english);
 
-    const fullTranscript = `${comfortableTranscript || languageDiagnosticTranscripts.comfortable} | ${englishTranscript || languageDiagnosticTranscripts.english}`;
+    const fullTranscript = `${comfortableText} | ${englishText}`;
 
     const scoreGap = comfortable.overallScore - english.overallScore;
 
