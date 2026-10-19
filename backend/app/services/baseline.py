@@ -16,4 +16,8 @@ def baseline_vector(bundle: SignalBundle) -> dict[str, float]:
         "content": bundle.fused.content,
         "coverage": bundle.content.coverage if bundle.content else 0.5,
         "primary_ratio": bundle.language.primary_ratio,
+        "gaze_away": bundle.visual.gaze_away if bundle.visual else 0.0,
+        "head_down": bundle.visual.head_down if bundle.visual else 0.0,
+        "freeze_ratio": bundle.visual.freeze_ratio if bundle.visual else 0.0,
+        "gesture_energy": bundle.visual.gesture_energy if bundle.visual else 0.0,
     }
