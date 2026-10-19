@@ -154,16 +154,12 @@ export default function ImpromptuPage() {
 
   async function onSpeechAnalyzed() {
     const finalTranscript = liveTranscript || transcript;
-    const res = await analyzeImpromptu(config, finalTranscript);
-    if (sttMetrics && sttMetrics.wpm > 0) {
-      res.analysis.initialWpm = Math.round(sttMetrics.wpm);
-      res.analysis.finalWpm = Math.round(sttMetrics.wpm * 0.95);
-      res.analysis.fillerCount = Math.round((sttMetrics.filler_rate / 100) * (finalTranscript.split(/\s+/).length || 20));
-      res.analysis.codeSwitchingDetected = sttMetrics.code_switch_rate > 0.15;
-    }
+    const res = await analyzeImpromptu(config, finalTranscript, sttMetrics);
     setAnalysisResult(res.analysis);
     setDiagnosisResult(res.diagnosis);
     setChallengeResult(res.challenge);
+
+    const pacingDrop = res.analysis.initialWpm - res.analysis.finalWpm;
 
     await saveGenericSession({
       sessionId: sessionId || undefined,
@@ -172,8 +168,8 @@ export default function ImpromptuPage() {
       language: selectedLanguage,
       difficulty: selectedDifficulty,
       overallScore: res.analysis.overallScore,
-      scoreDelta: 12,
-      primaryWeakness: "Lexical repetition after 30s",
+      scoreDelta: Math.abs(pacingDrop),
+      primaryWeakness: pacingDrop > 20 ? "Lexical repetition and pacing decay" : "Spontaneous idea structuring",
       diagnosis: res.diagnosis,
       transcript: finalTranscript,
       metrics: res.analysis,

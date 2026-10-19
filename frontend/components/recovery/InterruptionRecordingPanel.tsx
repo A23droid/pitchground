@@ -16,11 +16,13 @@ export function InterruptionRecordingPanel({
 }: {
   prompt: string;
   transcript: string;
-  onSubmit: () => void;
+  onSubmit: (finalTranscript: string, latencySeconds: number) => void;
 }) {
   const [before, after] = transcript.split(INTERRUPT_MARKER);
   const [phase, setPhase] = useState<"ready" | "typing-before" | "interrupted" | "typing-after" | "done">("ready");
   const [typed, setTyped] = useState("");
+  const [interruptTimestamp, setInterruptTimestamp] = useState<number | null>(null);
+  const [measuredLatency, setMeasuredLatency] = useState<number>(2.1);
 
   useEffect(() => {
     if (phase !== "typing-before") return;
@@ -31,11 +33,11 @@ export function InterruptionRecordingPanel({
       if (i >= before.length) {
         clearInterval(interval);
         setPhase("interrupted");
+        setInterruptTimestamp(Date.now());
       }
     }, 20);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, before]);
 
   useEffect(() => {
     if (phase !== "typing-after") return;
@@ -49,8 +51,15 @@ export function InterruptionRecordingPanel({
       }
     }, 20);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, before, after]);
+
+  function handleResume() {
+    if (interruptTimestamp) {
+      const elapsed = Math.max(0.8, (Date.now() - interruptTimestamp) / 1000);
+      setMeasuredLatency(Number(elapsed.toFixed(1)));
+    }
+    setPhase("typing-after");
+  }
 
   return (
     <Card className="flex flex-col p-6 sm:p-8">
@@ -93,7 +102,7 @@ export function InterruptionRecordingPanel({
                   Interviewer interrupts: &ldquo;Can you clarify that for a beginner?&rdquo;
                 </p>
               </div>
-              <Button size="sm" variant="dark" onClick={() => setPhase("typing-after")}>
+              <Button size="sm" variant="dark" onClick={handleResume}>
                 Resume answering
               </Button>
             </motion.div>
@@ -113,7 +122,7 @@ export function InterruptionRecordingPanel({
           )}
           {phase === "done" && (
             <motion.div key="submit" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-              <Button size="lg" onClick={onSubmit}>
+              <Button size="lg" onClick={() => onSubmit(typed, measuredLatency)}>
                 Submit response
                 <ArrowRight size={16} />
               </Button>

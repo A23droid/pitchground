@@ -35,13 +35,14 @@ export function getRandomImpromptuTopic(excludeId?: string): ImpromptuTopic {
 export async function analyzeImpromptu(
   config: ImpromptuConfig,
   transcript: string,
+  sttMetrics?: { wpm?: number; filler_rate?: number; pause_ratio?: number; code_switch_rate?: number } | null,
 ): Promise<{
   analysis: ImpromptuAnalysis;
   diagnosis: FailureDiagnosis;
   challenge: TargetedChallenge;
 }> {
   await delay(1100);
-  const analysis = generateImpromptuAnalysis(config);
+  const analysis = generateImpromptuAnalysis(config, transcript, sttMetrics);
   const diagnosis = generateImpromptuDiagnosis(analysis);
   const challenge = generateImpromptuChallenge(config);
 

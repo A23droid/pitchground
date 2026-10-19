@@ -49,7 +49,7 @@ export async function analyzeDebate(
   challenge: TargetedChallenge;
 }> {
   await delay(1200);
-  const analysis = generateDebateAnalysis(config);
+  const analysis = generateDebateAnalysis(config, rounds);
   const diagnosis = generateDebateDiagnosis(analysis);
   const challenge = generateDebateChallenge(config);
 

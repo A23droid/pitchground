@@ -405,19 +405,25 @@ export default function DebateArenaPage() {
   }
 
   async function onAnalysisDone() {
-    const sampleRounds: DebateRoundData[] = [
-      { round: 1, userTranscript: script.userOpening, timeLimitSeconds: 60 },
+    const userRounds: DebateRoundData[] = [
+      {
+        round: 1,
+        userTranscript: debateHistory.userOpening || script.userOpening,
+        timeLimitSeconds: 60,
+      },
       {
         round: 2,
-        userTranscript: script.userRebuttal,
+        userTranscript: debateHistory.userRebuttal || script.userRebuttal,
         aiCounterTranscript: script.aiCounter,
         timeLimitSeconds: 30,
       },
     ];
-    const res = await analyzeDebate(config, sampleRounds);
+    const res = await analyzeDebate(config, userRounds);
     setAnalysisResult(res.analysis);
     setDiagnosisResult(res.diagnosis);
     setChallengeResult(res.challenge);
+
+    const delta = res.analysis.openingScore - res.analysis.rebuttalScore;
 
     await saveGenericSession({
       sessionId: sessionId || undefined,
@@ -427,10 +433,10 @@ export default function DebateArenaPage() {
       language: selectedLanguage,
       difficulty: selectedDifficulty,
       overallScore: res.analysis.overallScore,
-      scoreDelta: 18,
-      primaryWeakness: "Rebuttal under counter-pressure",
+      scoreDelta: Math.abs(delta),
+      primaryWeakness: delta > 10 ? "Rebuttal under counter-pressure" : "Premise refutation precision",
       diagnosis: res.diagnosis,
-      transcript: [script.userOpening, script.userRebuttal, script.userClosing].filter(Boolean).join(" "),
+      transcript: [debateHistory.userOpening || script.userOpening, debateHistory.userRebuttal || script.userRebuttal, debateHistory.userClosing || script.userClosing].filter(Boolean).join(" "),
       metrics: res.analysis,
     });
 

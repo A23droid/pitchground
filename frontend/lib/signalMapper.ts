@@ -18,10 +18,12 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
   const overall = Math.round((structure + fluency + composure + presence + contentScore) / 5);
 
   // Compute camera stress level (0-100) based on freeze ratio, gaze instability, and vocal tremor
-  const freezeRatio = visual?.freeze_ratio ?? 0.05;
-  const gazeAway = visual?.gaze_away ?? 0.1;
-  const energyVar = acoustic?.energy_var ?? 0.1;
-  const stressRaw = (freezeRatio * 0.4 + gazeAway * 0.35 + Math.min(1.0, energyVar * 2) * 0.25) * 100;
+  const freezeRatio = visual?.freeze_ratio ?? 0.0;
+  const gazeAway = visual?.gaze_away ?? 0.0;
+  const energyVar = acoustic?.energy_var ?? 0.0;
+  const stressRaw = visual
+    ? (freezeRatio * 0.4 + gazeAway * 0.35 + Math.min(1.0, energyVar * 2) * 0.25) * 100
+    : Math.min(1.0, energyVar * 2) * 50;
   const stressScore = Math.min(100, Math.max(0, Math.round(stressRaw)));
 
   // Generate actionable improvement suggestions based on ML metrics
@@ -88,12 +90,12 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
       responseLatencySeconds: Number((pauseRatio * 2).toFixed(1)),
     },
     visual: {
-      gaze: visual ? pct(1 - (visual.gaze_away ?? 0.1)) : 75,
-      posture: visual ? pct(1 - (visual.head_down ?? 0.1)) : 75,
-      engagement: visual ? pct(visual.gesture_energy ?? 0.4) : 70,
+      gaze: visual ? pct(1 - (visual.gaze_away ?? 0.0)) : 80,
+      posture: visual ? pct(1 - (visual.head_down ?? 0.0)) : 80,
+      engagement: visual ? pct(visual.gesture_energy ?? 0.0) : 80,
       stressScore,
-      eyeContactScore: visual ? pct(1 - (visual.gaze_away ?? 0.1)) : 75,
-      handGestureScore: visual ? pct(visual.gesture_energy ?? 0.4) : 70,
+      eyeContactScore: visual ? pct(1 - (visual.gaze_away ?? 0.0)) : 80,
+      handGestureScore: visual ? pct(visual.gesture_energy ?? 0.0) : 80,
     },
     language: {
       primaryLanguage: language.primary === "hi" ? "Hindi" : language.primary === "mixed" ? "Mixed" : "English",

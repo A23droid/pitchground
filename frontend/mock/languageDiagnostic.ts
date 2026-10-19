@@ -7,29 +7,88 @@ export interface LanguageDiagnosticResult {
   recommendation: string;
 }
 
-const base = (overrides: Partial<AttemptAnalysis>): AttemptAnalysis => ({
-  attemptId: `lang-${Math.random().toString(36).slice(2)}`,
-  content: { correctness: 91, relevance: 92, topicUnderstanding: 90 },
-  communication: { structure: 85, clarity: 87, coherence: 86, fluency: 88 },
-  voice: { speakingRateWpm: 128, fillerCount: 4, pauseCount: 2, responseLatencySeconds: 1.2 },
-  visual: { gaze: 85, posture: 87, engagement: 88 },
-  language: { primaryLanguage: "Malayalam", codeSwitchingDetected: false, englishArticulation: 90 },
-  overallScore: 88,
-  ...overrides,
-});
+export function computeDiagnosticAnalysis(
+  language: Language,
+  transcript?: string,
+  sttMetrics?: { wpm?: number; filler_rate?: number; pause_ratio?: number; code_switch_rate?: number } | null,
+  isEnglish = false,
+): AttemptAnalysis {
+  const words = (transcript || "").trim().split(/\s+/).filter(Boolean);
+  const wordCount = words.length;
 
-export function generateComfortableLanguageAnalysis(language: Language): AttemptAnalysis {
-  return base({ language: { primaryLanguage: language, codeSwitchingDetected: language === "Mixed", englishArticulation: 90 } });
+  const wpm = sttMetrics?.wpm && sttMetrics.wpm > 0
+    ? Math.round(sttMetrics.wpm)
+    : wordCount > 0
+    ? Math.min(220, Math.max(40, Math.round(wordCount / 0.5)))
+    : isEnglish ? 105 : 130;
+
+  const fillerRate = sttMetrics?.filler_rate ?? (
+    (transcript?.match(/\b(uh+|um+|ah+|eh+|er+|mm+|hmm+|like|you know)\b/gi) || []).length / Math.max(1, wordCount) * 100
+  );
+
+  const pauseRatio = sttMetrics?.pause_ratio ?? 0.12;
+
+  // Real fluency score
+  const fluency = Math.min(100, Math.max(25, Math.round(100 - fillerRate * (isEnglish ? 5 : 4) - Math.max(0, pauseRatio - 0.2) * 50)));
+
+  // Real clarity score
+  const pacingPenalty = Math.abs(wpm - 135) * 0.5;
+  const clarity = Math.min(100, Math.max(30, Math.round(100 - pacingPenalty - fillerRate * 2)));
+
+  // Real content understanding & correctness
+  const contentScore = Math.min(100, Math.max(40, Math.round(Math.min(55, wordCount * 1.3) + 45)));
+
+  // Real structure
+  const structure = Math.min(100, Math.max(30, Math.round(contentScore * 0.5 + fluency * 0.5)));
+
+  // Real articulation
+  const englishArticulation = isEnglish ? Math.round(fluency * 0.6 + clarity * 0.4) : 90;
+
+  // Real overall score
+  const overallScore = Math.round((contentScore + fluency + clarity + structure) / 4);
+
+  return {
+    attemptId: `lang-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    content: {
+      correctness: contentScore,
+      relevance: Math.min(100, contentScore + 2),
+      topicUnderstanding: contentScore,
+    },
+    communication: {
+      structure,
+      clarity,
+      coherence: structure,
+      fluency,
+    },
+    voice: {
+      speakingRateWpm: wpm,
+      fillerCount: Math.round((fillerRate / 100) * wordCount),
+      pauseCount: Math.round(pauseRatio * 15),
+      responseLatencySeconds: Number((pauseRatio * 3).toFixed(1)),
+    },
+    visual: { gaze: 85, posture: 87, engagement: 85 },
+    language: {
+      primaryLanguage: language,
+      codeSwitchingDetected: sttMetrics?.code_switch_rate !== undefined ? sttMetrics.code_switch_rate > 0.15 : language === "Mixed",
+      englishArticulation,
+    },
+    overallScore,
+  };
 }
 
-export function generateEnglishAttemptAnalysis(): AttemptAnalysis {
-  return base({
-    content: { correctness: 88, relevance: 89, topicUnderstanding: 87 },
-    communication: { structure: 58, clarity: 54, coherence: 57, fluency: 49 },
-    voice: { speakingRateWpm: 101, fillerCount: 14, pauseCount: 7, responseLatencySeconds: 2.8 },
-    language: { primaryLanguage: "English", codeSwitchingDetected: false, englishArticulation: 56 },
-    overallScore: 61,
-  });
+export function generateComfortableLanguageAnalysis(
+  language: Language,
+  transcript?: string,
+  sttMetrics?: { wpm?: number; filler_rate?: number; pause_ratio?: number; code_switch_rate?: number } | null,
+): AttemptAnalysis {
+  return computeDiagnosticAnalysis(language, transcript, sttMetrics, false);
+}
+
+export function generateEnglishAttemptAnalysis(
+  transcript?: string,
+  sttMetrics?: { wpm?: number; filler_rate?: number; pause_ratio?: number; code_switch_rate?: number } | null,
+): AttemptAnalysis {
+  return computeDiagnosticAnalysis("English", transcript, sttMetrics, true);
 }
 
 export const languageDiagnosticTranscripts = {

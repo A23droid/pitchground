@@ -101,30 +101,32 @@ export default function LanguageDiagnosticPage() {
 
   async function onComfortableAnalyzed() {
     await delay(200);
-    const base = generateComfortableLanguageAnalysis(language);
-    if (comfortableSttMetrics && comfortableSttMetrics.wpm > 0) {
-      base.voice.speakingRateWpm = Math.round(comfortableSttMetrics.wpm);
-      base.voice.fillerRatePercent = comfortableSttMetrics.filler_rate;
-      base.communication.fluency = Math.min(100, Math.max(40, Math.round(100 - comfortableSttMetrics.filler_rate * 4)));
-    }
-    setComfortableResult(base);
+    const comfortable = generateComfortableLanguageAnalysis(
+      language,
+      comfortableTranscript || languageDiagnosticTranscripts.comfortable,
+      comfortableSttMetrics,
+    );
+    setComfortableResult(comfortable);
     setStage("english-question");
   }
 
   async function onEnglishAnalyzed() {
     await delay(200);
-    const comfortable = comfortableResult || generateComfortableLanguageAnalysis(language);
-    const english = generateEnglishAttemptAnalysis();
-    if (englishSttMetrics && englishSttMetrics.wpm > 0) {
-      english.voice.speakingRateWpm = Math.round(englishSttMetrics.wpm);
-      english.voice.fillerRatePercent = englishSttMetrics.filler_rate;
-      english.communication.fluency = Math.min(100, Math.max(30, Math.round(100 - englishSttMetrics.filler_rate * 5)));
-      english.language.codeSwitchingDetected = englishSttMetrics.code_switch_rate > 0.15;
-    }
+    const comfortable = comfortableResult || generateComfortableLanguageAnalysis(
+      language,
+      comfortableTranscript || languageDiagnosticTranscripts.comfortable,
+      comfortableSttMetrics,
+    );
+    const english = generateEnglishAttemptAnalysis(
+      englishTranscript || languageDiagnosticTranscripts.english,
+      englishSttMetrics,
+    );
     setComfortableResult(comfortable);
     setEnglishResult(english);
 
     const fullTranscript = `${comfortableTranscript || languageDiagnosticTranscripts.comfortable} | ${englishTranscript || languageDiagnosticTranscripts.english}`;
+
+    const scoreGap = comfortable.overallScore - english.overallScore;
 
     await saveGenericSession({
       sessionId: sessionId || undefined,
@@ -133,8 +135,8 @@ export default function LanguageDiagnosticPage() {
       language,
       difficulty: "Standard",
       overallScore: english.overallScore,
-      scoreDelta: english.overallScore - comfortable.overallScore,
-      primaryWeakness: "English articulation vs conceptual knowledge",
+      scoreDelta: Math.abs(scoreGap),
+      primaryWeakness: scoreGap > 10 ? "English articulation vs conceptual knowledge" : "Vocabulary richness in English",
       transcript: fullTranscript,
       metrics: { comfortable, english },
     });
