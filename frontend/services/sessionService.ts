@@ -27,7 +27,7 @@ export interface BackendAttempt {
 }
 
 export interface CreateSessionParams {
-  mode?: "interview" | "debate" | "impromptu" | "language-diagnostic";
+  mode?: "interview" | "debate" | "impromptu" | "language-diagnostic" | "recovery-training";
   topic: string;
   audience?: string;
   language?: string;
