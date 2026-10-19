@@ -337,6 +337,11 @@ def run_diagnosis_pipeline(db: Session, session: SessionModel) -> None:
 
     transcript = pressure_a.transcript.text if pressure_a.transcript else ""
     diagnosis = render_diagnosis(candidates, evidence, transcript)
+    item = (
+        _bank(db, session.topic, "retry")
+        or _bank(db, session.topic, "pressure")
+        or _bank(db, "Database Systems", "retry")
+    )
     challenge = render_challenge(
         diagnosis,
         item.prompt if item else "Retry the same topic under 20 seconds.",
