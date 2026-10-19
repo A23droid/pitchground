@@ -39,8 +39,8 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-ML_ANALYZER = os.getenv("ML_ANALYZER", "stub")  # stub | real
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "openai/gpt-oss-120b")
+ML_ANALYZER = os.getenv("ML_ANALYZER", "real")  # real | stub
 
 # local | nhost
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()

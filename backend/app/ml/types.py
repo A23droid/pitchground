@@ -14,18 +14,27 @@ FailureCondition = Literal[
 ]
 
 
+class TranscriptWord(BaseModel):
+    word: str
+    start_sec: float
+    end_sec: float
+    probability: float | None = None
+
+
 class TranscriptSegment(BaseModel):
     start_sec: float
     end_sec: float
     text: str
-    language: Literal["en", "hi", "unknown"] = "unknown"
+    language: str = "en"
+    words: list[TranscriptWord] = Field(default_factory=list)
 
 
 class Transcript(BaseModel):
     text: str
-    language: Literal["en", "hi", "mixed", "unknown"] = "unknown"
+    language: str = "en"
     confidence: float | None = None
     segments: list[TranscriptSegment] = Field(default_factory=list)
+    words: list[TranscriptWord] = Field(default_factory=list)
 
 
 class AttemptMedia(BaseModel):
@@ -35,7 +44,7 @@ class AttemptMedia(BaseModel):
 
 
 class AnalysisConfig(BaseModel):
-    practice_language: Literal["en", "hi"] = "en"
+    practice_language: str = "en"
     question_key_points: list[str] = Field(default_factory=list)
     sample_fps: float = 5
     skip_vision: bool = True
@@ -52,7 +61,7 @@ class AcousticSignals(BaseModel):
 
 
 class LanguageSignals(BaseModel):
-    primary: Literal["en", "hi", "mixed", "unknown"] = "en"
+    primary: str = "en"
     primary_ratio: float = 0.9
     code_switch_rate: float = 0.1
 

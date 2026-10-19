@@ -51,7 +51,9 @@ export interface CommunicationAnalysis {
 export interface VoiceAnalysis {
   speakingRateWpm: number;
   fillerCount: number;
+  fillerRatePercent?: number; // Fillers per 100 words
   pauseCount: number;
+  pauseRatioPercent?: number; // Percentage of time in silence
   responseLatencySeconds: number;
 }
 
@@ -59,6 +61,9 @@ export interface VisualAnalysis {
   gaze: number; // 0-100 engagement-style score
   posture: number;
   engagement: number;
+  stressScore?: number; // 0-100 calculated from freeze ratio, gaze instability & tremor
+  eyeContactScore?: number; // 0-100 camera focal alignment
+  handGestureScore?: number; // 0-100 expressive movement score
 }
 
 export interface LanguageAnalysis {
@@ -75,6 +80,7 @@ export interface AttemptAnalysis {
   visual: VisualAnalysis;
   language: LanguageAnalysis;
   overallScore: number;
+  improvements?: string[]; // Actionable feedback tips
 }
 
 // --- Diagnosis --------------------------------------------------------------

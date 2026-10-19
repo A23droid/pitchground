@@ -28,9 +28,25 @@ Also keep `http://localhost:3000` as an authorized JavaScript origin.
 
 `POST /auth/demo` when `DEMO_AUTH=1`.
 
-## ML teammate seat
+## ML Engine (`app/ml`)
 
-See [`app/ml/README.md`](app/ml/README.md). `ML_ANALYZER=stub` by default.
+Set `ML_ANALYZER=real` in `.env` to run the multimodal ML models locally:
+- **Speech-to-Text:** Local `faster-whisper` (CPU int8) preserving disfluencies (*"um"*, *"uh"*, *"matlab"*, *"like"*).
+- **Acoustic Prosody:** `librosa` extracting speaking rate (WPM), pause ratio, and pitch variance.
+- **Computer Vision:** `mediapipe` (Face Mesh + Pose) extracting eye contact, head posture, gestures, and camera stress score.
+- **Content:** Key-point semantic coverage & specificity evaluation.
+
+For low-resource environments without local ML packages, set `ML_ANALYZER=stub`.
+
+See [docs/ML_ARCHITECTURE_AND_SPECIFICATION.md](../docs/ML_ARCHITECTURE_AND_SPECIFICATION.md) and [docs/ML_IMPLEMENTATION_AND_DEVELOPER_GUIDE.md](../docs/ML_IMPLEMENTATION_AND_DEVELOPER_GUIDE.md) for full contracts.
+
+### ML Test Suite
+```bash
+python tests/test_local_ml.py         # Unit tests (waveform + frame synthesis)
+python tests/test_phase2_stt.py        # Verbatim STT + filler detection tests
+python tests/test_phase2_api.py        # Factory & RealAnalyzer integration tests
+python tests/test_live_verbatim_speech.py  # Live REST API end-to-end test
+```
 
 ## Routes
 
