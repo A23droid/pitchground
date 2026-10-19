@@ -68,12 +68,33 @@ class LanguageExtractor:
         # Use Whisper model's detected language if available
         whisper_lang = (transcript.language or "en").lower()
         
-        # Analyze unicode scripts present in the transcript (Latin vs Devanagari vs other Indic scripts)
-        devanagari_chars = len(re.findall(r"[\u0900-\u097F]", text))
-        latin_chars = len(re.findall(r"[a-zA-Z]", text))
-        total_script_chars = max(1, devanagari_chars + latin_chars)
+        # Analyze unicode scripts present in the transcript (Latin vs Indic scripts vs others)
+        indic_scripts = {
+            "hi": r"[\u0900-\u097F]",  # Devanagari (Hindi, Marathi, Nepali)
+            "bn": r"[\u0980-\u09FF]",  # Bengali, Assamese
+            "pa": r"[\u0A00-\u0A7F]",  # Gurmukhi (Punjabi)
+            "gu": r"[\u0A80-\u0AFF]",  # Gujarati
+            "or": r"[\u0B00-\u0B7F]",  # Oriya
+            "ta": r"[\u0B80-\u0BFF]",  # Tamil
+            "te": r"[\u0C00-\u0C7F]",  # Telugu
+            "kn": r"[\u0C80-\u0CFF]",  # Kannada
+            "ml": r"[\u0D00-\u0D7F]",  # Malayalam
+            "ur": r"[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]",  # Perso-Arabic (Urdu)
+        }
 
-        devanagari_ratio = devanagari_chars / total_script_chars
+        script_counts: dict[str, int] = {}
+        for code, pattern in indic_scripts.items():
+            cnt = len(re.findall(pattern, text))
+            if cnt > 0:
+                script_counts[code] = cnt
+
+        latin_chars = len(re.findall(r"[a-zA-Z]", text))
+        indic_chars = sum(script_counts.values())
+        total_script_chars = max(1, indic_chars + latin_chars)
+
+        top_indic_lang = max(script_counts, key=script_counts.get) if script_counts else None
+        top_indic_count = script_counts[top_indic_lang] if top_indic_lang else 0
+        indic_ratio = top_indic_count / total_script_chars
         latin_ratio = latin_chars / total_script_chars
 
         # Segment-level language transitions from Whisper
@@ -84,25 +105,25 @@ class LanguageExtractor:
                 segment_switches += 1
 
         # Determine primary language & code-switching rate
-        if devanagari_ratio > 0.65:
-            primary = "hi"
-            primary_ratio = round(devanagari_ratio, 2)
+        if indic_ratio > 0.60 and top_indic_lang:
+            primary = top_indic_lang
+            primary_ratio = round(indic_ratio, 2)
             code_switch_rate = round(latin_ratio * 1.5 + (segment_switches * 0.1), 2)
-        elif devanagari_ratio > 0.10:
+        elif indic_ratio > 0.12 and latin_ratio > 0.12:
             primary = "mixed"
-            primary_ratio = round(max(devanagari_ratio, latin_ratio), 2)
+            primary_ratio = round(max(indic_ratio, latin_ratio), 2)
             code_switch_rate = round(min(1.0, 0.20 + (segment_switches * 0.15)), 2)
-        elif whisper_lang in ("hi", "hindi"):
-            primary = "hi"
+        elif whisper_lang and whisper_lang not in ("unknown", "en"):
+            primary = whisper_lang
             primary_ratio = round(transcript.confidence or 0.85, 2)
-            code_switch_rate = 0.05
+            code_switch_rate = round(segment_switches * 0.1, 2)
         else:
             primary = "en"
-            primary_ratio = round(latin_ratio if total_script_chars > 0 else 1.0, 2)
+            primary_ratio = round(latin_ratio if (indic_chars + latin_chars) > 0 else 1.0, 2)
             code_switch_rate = round(segment_switches * 0.1, 2)
 
         return LanguageSignals(
-            primary=primary,  # type: ignore[arg-type]
+            primary=primary,
             primary_ratio=primary_ratio,
             code_switch_rate=min(1.0, code_switch_rate),
         ), filler_rate

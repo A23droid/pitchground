@@ -7,12 +7,13 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ChipGroup } from "@/components/shared/OptionGrid";
-import { RecordingPanel } from "@/components/interview/RecordingPanel";
+import { RecordingPanel, type RecordingSubmitPayload } from "@/components/interview/RecordingPanel";
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
 import { LanguageComparisonPanel } from "@/components/language/LanguageComparisonPanel";
 import { ANALYSIS_STAGES } from "@/services/analysisService";
 import { saveGenericSession } from "@/services/learnerService";
 import { createSession } from "@/services/sessionService";
+import { transcribeAudioBlob } from "@/services/sttService";
 import {
   generateComfortableLanguageAnalysis,
   generateEnglishAttemptAnalysis,
@@ -33,6 +34,10 @@ export default function LanguageDiagnosticPage() {
   const [language, setLanguage] = useState<Language>("Malayalam");
   const [comfortableResult, setComfortableResult] = useState<AttemptAnalysis | null>(null);
   const [englishResult, setEnglishResult] = useState<AttemptAnalysis | null>(null);
+  const [comfortableTranscript, setComfortableTranscript] = useState<string>("");
+  const [englishTranscript, setEnglishTranscript] = useState<string>("");
+  const [comfortableSttMetrics, setComfortableSttMetrics] = useState<any>(null);
+  const [englishSttMetrics, setEnglishSttMetrics] = useState<any>(null);
 
   const comfortableQuestion: RoundQuestion = {
     id: "lang-comfortable",
@@ -63,18 +68,63 @@ export default function LanguageDiagnosticPage() {
     }
   }
 
+  async function handleComfortableSubmit(payload: RecordingSubmitPayload) {
+    setStage("comfortable-analyzing");
+    if (payload.audioBlob && payload.audioBlob.size > 200) {
+      try {
+        const langCode = language === "Malayalam" ? "ml" : language === "Hindi" ? "hi" : "auto";
+        const res = await transcribeAudioBlob(payload.audioBlob, langCode);
+        if (res.text && res.text.trim()) {
+          setComfortableTranscript(res.text.trim());
+          setComfortableSttMetrics(res.metrics);
+        }
+      } catch (err) {
+        console.warn("Comfortable STT error:", err);
+      }
+    }
+  }
+
+  async function handleEnglishSubmit(payload: RecordingSubmitPayload) {
+    setStage("english-analyzing");
+    if (payload.audioBlob && payload.audioBlob.size > 200) {
+      try {
+        const res = await transcribeAudioBlob(payload.audioBlob, "en");
+        if (res.text && res.text.trim()) {
+          setEnglishTranscript(res.text.trim());
+          setEnglishSttMetrics(res.metrics);
+        }
+      } catch (err) {
+        console.warn("English STT error:", err);
+      }
+    }
+  }
+
   async function onComfortableAnalyzed() {
-    await delay(0);
-    setComfortableResult(generateComfortableLanguageAnalysis(language));
+    await delay(200);
+    const base = generateComfortableLanguageAnalysis(language);
+    if (comfortableSttMetrics && comfortableSttMetrics.wpm > 0) {
+      base.voice.speakingRateWpm = Math.round(comfortableSttMetrics.wpm);
+      base.voice.fillerRatePercent = comfortableSttMetrics.filler_rate;
+      base.communication.fluency = Math.min(100, Math.max(40, Math.round(100 - comfortableSttMetrics.filler_rate * 4)));
+    }
+    setComfortableResult(base);
     setStage("english-question");
   }
 
   async function onEnglishAnalyzed() {
-    await delay(0);
-    const comfortable = generateComfortableLanguageAnalysis(language);
+    await delay(200);
+    const comfortable = comfortableResult || generateComfortableLanguageAnalysis(language);
     const english = generateEnglishAttemptAnalysis();
+    if (englishSttMetrics && englishSttMetrics.wpm > 0) {
+      english.voice.speakingRateWpm = Math.round(englishSttMetrics.wpm);
+      english.voice.fillerRatePercent = englishSttMetrics.filler_rate;
+      english.communication.fluency = Math.min(100, Math.max(30, Math.round(100 - englishSttMetrics.filler_rate * 5)));
+      english.language.codeSwitchingDetected = englishSttMetrics.code_switch_rate > 0.15;
+    }
     setComfortableResult(comfortable);
     setEnglishResult(english);
+
+    const fullTranscript = `${comfortableTranscript || languageDiagnosticTranscripts.comfortable} | ${englishTranscript || languageDiagnosticTranscripts.english}`;
 
     await saveGenericSession({
       sessionId: sessionId || undefined,
@@ -85,7 +135,7 @@ export default function LanguageDiagnosticPage() {
       overallScore: english.overallScore,
       scoreDelta: english.overallScore - comfortable.overallScore,
       primaryWeakness: "English articulation vs conceptual knowledge",
-      transcript: `${languageDiagnosticTranscripts.comfortable} | ${languageDiagnosticTranscripts.english}`,
+      transcript: fullTranscript,
       metrics: { comfortable, english },
     });
 
@@ -134,8 +184,8 @@ export default function LanguageDiagnosticPage() {
           {stage === "comfortable-question" && (
             <RecordingPanel
               question={comfortableQuestion}
-              transcript={languageDiagnosticTranscripts.comfortable}
-              onSubmit={() => setStage("comfortable-analyzing")}
+              language={language}
+              onSubmit={handleComfortableSubmit}
             />
           )}
 
@@ -146,8 +196,8 @@ export default function LanguageDiagnosticPage() {
           {stage === "english-question" && (
             <RecordingPanel
               question={englishQuestion}
-              transcript={languageDiagnosticTranscripts.english}
-              onSubmit={() => setStage("english-analyzing")}
+              language="English"
+              onSubmit={handleEnglishSubmit}
             />
           )}
 

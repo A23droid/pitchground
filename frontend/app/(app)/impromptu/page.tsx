@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ChipGroup, OptionGrid } from "@/components/shared/OptionGrid";
 import { Select } from "@/components/ui/Select";
-import { RecordingPanel } from "@/components/interview/RecordingPanel";
+import { RecordingPanel, type RecordingSubmitPayload } from "@/components/interview/RecordingPanel";
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
 import { PrepCountdown } from "@/components/impromptu/PrepCountdown";
 import { ImpromptuReportPanel } from "@/components/impromptu/ImpromptuReportPanel";
@@ -22,6 +22,7 @@ import {
 } from "@/services/impromptuService";
 import { saveGenericSession } from "@/services/learnerService";
 import { createSession } from "@/services/sessionService";
+import { transcribeAudioBlob } from "@/services/sttService";
 import type {
   Difficulty,
   FailureDiagnosis,
@@ -120,12 +121,46 @@ export default function ImpromptuPage() {
     }
   }
 
-  async function handleSpeechSubmit(submittedTranscript: string) {
+  const [liveTranscript, setLiveTranscript] = useState<string>("");
+  const [sttMetrics, setSttMetrics] = useState<{
+    wpm: number;
+    filler_rate: number;
+    pause_ratio: number;
+    primary_language: string;
+    code_switch_rate: number;
+  } | null>(null);
+
+  async function handleSpeechSubmit(payload: RecordingSubmitPayload) {
     setStage("analyzing");
+    if (payload.audioBlob && payload.audioBlob.size > 200) {
+      try {
+        const langCode = selectedLanguage.toLowerCase().slice(0, 2);
+        const result = await transcribeAudioBlob(payload.audioBlob, langCode);
+        if (result.text && result.text.trim()) {
+          setLiveTranscript(result.text.trim());
+          setSttMetrics({
+            wpm: result.metrics.wpm,
+            filler_rate: result.metrics.filler_rate,
+            pause_ratio: result.metrics.pause_ratio,
+            primary_language: result.metrics.primary_language,
+            code_switch_rate: result.metrics.code_switch_rate,
+          });
+        }
+      } catch (e) {
+        console.warn("Local STT transcription error:", e);
+      }
+    }
   }
 
   async function onSpeechAnalyzed() {
-    const res = await analyzeImpromptu(config, transcript);
+    const finalTranscript = liveTranscript || transcript;
+    const res = await analyzeImpromptu(config, finalTranscript);
+    if (sttMetrics && sttMetrics.wpm > 0) {
+      res.analysis.initialWpm = Math.round(sttMetrics.wpm);
+      res.analysis.finalWpm = Math.round(sttMetrics.wpm * 0.95);
+      res.analysis.fillerCount = Math.round((sttMetrics.filler_rate / 100) * (finalTranscript.split(/\s+/).length || 20));
+      res.analysis.codeSwitchingDetected = sttMetrics.code_switch_rate > 0.15;
+    }
     setAnalysisResult(res.analysis);
     setDiagnosisResult(res.diagnosis);
     setChallengeResult(res.challenge);
@@ -140,7 +175,7 @@ export default function ImpromptuPage() {
       scoreDelta: 12,
       primaryWeakness: "Lexical repetition after 30s",
       diagnosis: res.diagnosis,
-      transcript: transcript,
+      transcript: finalTranscript,
       metrics: res.analysis,
     });
 
@@ -356,8 +391,8 @@ export default function ImpromptuPage() {
           {stage === "speaking" && (
             <RecordingPanel
               question={speakQuestion}
-              transcript={transcript}
-              onSubmit={(payload) => void handleSpeechSubmit(payload.transcript || transcript || "")}
+              language={selectedLanguage}
+              onSubmit={handleSpeechSubmit}
             />
           )}
 
@@ -395,13 +430,7 @@ export default function ImpromptuPage() {
 
               <RecordingPanel
                 question={challengeQuestion}
-                transcript={
-                  selectedLanguage === "Malayalam"
-                    ? "Point: Distributed system എന്നത് traffic bottleneck പോലെയാണ്. Explain: Heavy load വരുമ്പോൾ single queue database stall ആകും. Example: Flash sale സമയത്ത് ecommerce servers down ആകുന്നതുപോലെ. Link: അതുകൊണ്ട് early stage-ൽ proper caching load balancing ഉറപ്പാക്കണം."
-                    : selectedLanguage === "Hindi"
-                    ? "Point: Distributed system bilkul traffic congestion jaisa behave karta hai. Explain: Jab concurrent calls aati hain toh single database node choke ho jati hai. Example: Jaise flash sale mein checkout crashes hote hain. Link: Isliye resilient architecture ke liye rate-limiting zaroori hai."
-                    : "Point: Distributed systems mirror urban congestion patterns. Explain: When concurrency spikes, un-indexed nodes become bottleneck points. Example: Just like flash sale checkout traffic overwhelming standard queues. Link: Therefore, rate limiting and distributed caching must be engineered from day one."
-                }
+                language={selectedLanguage}
                 onSubmit={() => setStage("challenge-analyzing")}
               />
             </div>

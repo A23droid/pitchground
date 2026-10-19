@@ -44,7 +44,7 @@ class AttemptMedia(BaseModel):
 
 
 class AnalysisConfig(BaseModel):
-    practice_language: Literal["en", "hi"] = "en"
+    practice_language: str = "en"
     question_key_points: list[str] = Field(default_factory=list)
     sample_fps: float = 5
     skip_vision: bool = True
@@ -61,7 +61,7 @@ class AcousticSignals(BaseModel):
 
 
 class LanguageSignals(BaseModel):
-    primary: Literal["en", "hi", "mixed", "unknown"] = "en"
+    primary: str = "en"
     primary_ratio: float = 0.9
     code_switch_rate: float = 0.1
 

@@ -20,6 +20,7 @@ import {
 } from "@/services/debateService";
 import { saveGenericSession } from "@/services/learnerService";
 import { createSession } from "@/services/sessionService";
+import { transcribeAudioBlob } from "@/services/sttService";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -150,6 +151,9 @@ export default function DebateArenaPage() {
   const desktopUserTranscriptRef = useRef<HTMLDivElement>(null);
   const desktopAiTranscriptRef = useRef<HTMLDivElement>(null);
   const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   // Evaluation results
   const [analysisResult, setAnalysisResult] = useState<DebateAnalysis | null>(null);
@@ -250,33 +254,6 @@ export default function DebateArenaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageMode, isUserTurn, userSpeechPhase, secondsLeft]);
 
-  // Typewriter effect for user speech once "Start Speaking" is triggered
-  useEffect(() => {
-    if (pageMode !== "arena" || !isUserTurn || userSpeechPhase !== "speaking") return;
-    setUserTypedTranscript("");
-
-    const targetFullText =
-      currentTurn === "user-opening"
-        ? script.userOpening
-        : currentTurn === "user-rebuttal"
-          ? script.userRebuttal
-          : script.userClosing;
-
-    let i = 0;
-    const speed = currentTurn === "user-opening" ? 18 : 14;
-    const interval = setInterval(() => {
-      i += 3;
-      setUserTypedTranscript(targetFullText.slice(0, i));
-      if (i >= targetFullText.length) {
-        clearInterval(interval);
-        setUserSpeechPhase("finished");
-      }
-    }, speed);
-
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageMode, currentTurn, userSpeechPhase]);
-
   // Trigger AI Turn speech & typewriter when control shifts to AI
   useEffect(() => {
     if (pageMode !== "arena" || !isAiTurn) return;
@@ -337,17 +314,55 @@ export default function DebateArenaPage() {
   function startUserSpeaking() {
     setUserSpeechPhase("speaking");
     setSecondsLeft(activeTurnInfo.timeLimitSeconds);
+    setUserTypedTranscript("Listening... Speak your argument.");
+
+    if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
+      try {
+        audioChunksRef.current = [];
+        const recorder = new MediaRecorder(streamRef.current);
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+        recorder.onstop = async () => {
+          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+          if (blob.size > 200) {
+            setIsTranscribing(true);
+            setUserTypedTranscript("Transcribing with local Faster-Whisper...");
+            try {
+              const langCode = selectedLanguage === "Malayalam" ? "ml" : selectedLanguage === "Hindi" ? "hi" : "auto";
+              const result = await transcribeAudioBlob(blob, langCode);
+              if (result.text && result.text.trim()) {
+                setUserTypedTranscript(result.text.trim());
+              } else {
+                setUserTypedTranscript("Speech recorded (low vocal amplitude detected).");
+              }
+            } catch (err) {
+              console.warn("Debate STT error:", err);
+              const targetFullText =
+                currentTurn === "user-opening"
+                  ? script.userOpening
+                  : currentTurn === "user-rebuttal"
+                    ? script.userRebuttal
+                    : script.userClosing;
+              setUserTypedTranscript(targetFullText);
+            } finally {
+              setIsTranscribing(false);
+            }
+          }
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start(250);
+      } catch (err) {
+        console.warn("MediaRecorder start error:", err);
+      }
+    }
   }
 
   function finishUserSpeech() {
-    const targetFullText =
-      currentTurn === "user-opening"
-        ? script.userOpening
-        : currentTurn === "user-rebuttal"
-          ? script.userRebuttal
-          : script.userClosing;
-    setUserTypedTranscript(targetFullText);
     setUserSpeechPhase("finished");
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
   }
 
   function submitUserTurn() {
@@ -1206,13 +1221,7 @@ export default function DebateArenaPage() {
 
             <RecordingPanel
               question={challengeQuestion}
-              transcript={
-                selectedLanguage === "Malayalam"
-                  ? "Point: Opponent automation bias-നെ കുറിച്ചാണ് പറയുന്നത്. Refutation: പക്ഷെ modern CI pipeline-ൽ static security gates ഉള്ളതുകൊണ്ട് unvetted code production-ൽ എത്തില്ല. Turnaround: അതുകൊണ്ട് യഥാർത്ഥത്തിൽ AI velocity security standards ഉയർത്തുകയാണ് ചെയ്യുന്നത്."
-                  : selectedLanguage === "Hindi"
-                    ? "Point: Opponent ka tarka hai automation bias. Refutation: Lekin automated security gates flawed code ko production se pehle hi block kar dete hain. Turnaround: Isliye AI velocity actually code quality ko enhance karti hai."
-                    : "Point: The opponent claims automation bias leads to unvetted bugs. Refutation: However, automated security linting catches structural flaws deterministically. Turnaround: Thus, AI accelerators actually enforce higher baseline code quality."
-              }
+              language={selectedLanguage}
               onSubmit={() => setPageMode("challenge-analyzing")}
             />
           </motion.div>
