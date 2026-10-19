@@ -6,7 +6,7 @@ from app.ml.types import SignalBundle
 def compare_attempts(pressure: SignalBundle, retry: SignalBundle, focus: list[str] | None = None) -> dict:
     if focus is None:
         focus = ["fused.structure", "fused.fluency", "acoustic.pause_ratio", "acoustic.filler_rate"]
-        if pressure.visual is not None or retry.visual is not None:
+        if pressure.visual is not None and retry.visual is not None:
             focus = focus + ["visual.gaze_away", "visual.freeze_ratio"]
     rows = []
     improved_flags = []
@@ -14,11 +14,16 @@ def compare_attempts(pressure: SignalBundle, retry: SignalBundle, focus: list[st
     def get(b: SignalBundle, path: str) -> float:
         root, leaf = path.split(".", 1)
         obj = getattr(b, root)
-        return float(getattr(obj, leaf)) if obj is not None else 0.0
+        value = getattr(obj, leaf) if obj is not None else None
+        return float(value) if value is not None else None
 
     for metric in focus:
+        if metric=="acoustic.filler_rate" and not all(bundle.acoustic.filler_detection.get("status")=="complete" for bundle in (pressure,retry)):
+            continue
         a = get(pressure, metric)
         b = get(retry, metric)
+        if a is None or b is None:
+            continue
         delta = b - a
         # For pause/filler/gaze/freeze/stress, lower is better
         if any(neg in metric for neg in ("pause", "filler", "gaze", "freeze", "stress")):

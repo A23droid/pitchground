@@ -16,40 +16,40 @@ export default function StartPage() {
       </motion.div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <ModeCard 
-          href="/interview" 
-          icon={Mic} 
-          title="Technical Interview" 
-          desc="Simulate a technical interview under pressure." 
-          delay={0.05} 
+        <ModeCard
+          href="/interview"
+          icon={Mic}
+          title="Interview"
+          desc="Simulate an interview for your chosen role or domain under pressure."
+          delay={0.05}
         />
-        <ModeCard 
-          href="/debate" 
-          icon={Swords} 
-          title="Debate Arena" 
-          desc="Live adversarial sparring against an AI." 
-          delay={0.1} 
+        <ModeCard
+          href="/debate"
+          icon={Swords}
+          title="Debate Arena"
+          desc="Live adversarial sparring against an AI."
+          delay={0.1}
         />
-        <ModeCard 
-          href="/impromptu" 
-          icon={Zap} 
-          title="Impromptu Speaking" 
-          desc="Unprepared response to a random prompt." 
-          delay={0.15} 
+        <ModeCard
+          href="/impromptu"
+          icon={Zap}
+          title="Impromptu Speaking"
+          desc="Unprepared response to a random prompt."
+          delay={0.15}
         />
-        <ModeCard 
-          href="/language-diagnostic" 
-          icon={LanguagesIcon} 
-          title="Language Diagnostic" 
-          desc="Test your English articulation and clarity." 
-          delay={0.2} 
+        <ModeCard
+          href="/language-diagnostic"
+          icon={LanguagesIcon}
+          title="Language Diagnostic"
+          desc="Test your English articulation and clarity."
+          delay={0.2}
         />
-        <ModeCard 
-          href="/recovery-training" 
-          icon={ShieldAlert} 
-          title="Recovery Training" 
-          desc="Practice recovering from mistakes." 
-          delay={0.25} 
+        <ModeCard
+          href="/recovery-training"
+          icon={ShieldAlert}
+          title="Recovery Training"
+          desc="Practice recovering from mistakes."
+          delay={0.25}
         />
       </div>
     </div>

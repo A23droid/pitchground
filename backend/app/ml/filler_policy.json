@@ -1,0 +1,14 @@
+{
+  "version": "waveform-filled-pauses-v1",
+  "model": "classla/wav2vecbert2-filledPause",
+  "revision": "de8def4ea3c32254a78a6bfdcb34a81ae13e5663",
+  "license": "Apache-2.0",
+  "sample_rate": 16000,
+  "frame_sec": 0.02,
+  "window_sec": 30,
+  "hop_sec": 25,
+  "probability_threshold": 0.5,
+  "min_duration_sec": 0.08,
+  "merge_gap_sec": 0.06,
+  "validated_languages": ["sl", "hr", "sr", "cs", "pl"]
+}

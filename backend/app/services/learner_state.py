@@ -13,25 +13,25 @@ DIMS = ["fluency", "composure", "presence", "structure", "language_stability", "
 
 
 def update_from_bundle(db: Session, learner_id: str, bundle: SignalBundle) -> None:
+    from app.models import Attempt, Session as SessionModel
+    from app.services.verified_metrics import verified_bundle
+    db.flush()
+    attempts=db.query(Attempt).join(SessionModel,Attempt.session_id==SessionModel.id).filter(SessionModel.learner_id==learner_id,Attempt.analysis_status=="complete").all()
+    bundles=[b for a in attempts if (b:=verified_bundle(a.metrics)) is not None]
     for dim in DIMS:
-        value = float(getattr(bundle.fused, dim)) * 100
-        row = (
-            db.query(LearnerDimensionScore)
-            .filter(LearnerDimensionScore.learner_id == learner_id, LearnerDimensionScore.dimension == dim)
-            .one_or_none()
-        )
+        measured=[value*100 for b in bundles if (value:=getattr(b.fused,dim)) is not None]
+        if not measured: continue
+        row=db.query(LearnerDimensionScore).filter(LearnerDimensionScore.learner_id==learner_id,LearnerDimensionScore.dimension==dim).one_or_none()
         if row is None:
-            row = LearnerDimensionScore(learner_id=learner_id, dimension=dim, score=value, n=1)
+            row=LearnerDimensionScore(learner_id=learner_id,dimension=dim,score=sum(measured)/len(measured),n=len(measured))
             db.add(row)
-        else:
-            row.n += 1
-            row.score = ((row.score * (row.n - 1)) + value) / row.n
-            row.updated_at = datetime.now(timezone.utc)
+        else:row.score=sum(measured)/len(measured);row.n=len(measured);row.updated_at=datetime.now(timezone.utc)
 
     snap = {
         "fused": bundle.fused.model_dump(),
+        "provenance": bundle.provenance,
         "attempt_id": bundle.attempt_id,
         "at": datetime.now(timezone.utc).isoformat(),
     }
     db.add(ProfileSnapshot(learner_id=learner_id, payload_json=json.dumps(snap)))
-    db.commit()
+    db.flush()

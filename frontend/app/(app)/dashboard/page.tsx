@@ -15,9 +15,11 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<LearnerProfile | null>(null);
   const [sessions, setSessions] = useState<RecentSessionSummary[] | null>(null);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    getLearnerProfile().then(setProfile);
-    getRecentSessions().then(setSessions);
+    Promise.all([getLearnerProfile(), getRecentSessions()]).then(([p,s]) => { setProfile(p); setSessions(s); })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load dashboard."));
   }, []);
 
   const loading = !profile || !sessions;
@@ -25,7 +27,7 @@ export default function DashboardPage() {
   return (
     <>
       <div className="mx-auto mt-6 flex w-full max-w-6xl min-w-0 flex-col gap-6 px-4 sm:mt-8 sm:px-6">
-        {loading ? (
+        {error ? <div role="alert" className="rounded-2xl border border-line bg-paper-raised p-6 text-sm text-ink-soft">{error}<button onClick={() => window.location.reload()} className="ml-3 text-lavender-ink">Retry</button></div> : loading ? (
           <DashboardSkeleton />
         ) : (
           <motion.div

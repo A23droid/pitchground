@@ -14,20 +14,14 @@ import { ANALYSIS_STAGES } from "@/services/analysisService";
 import { saveGenericSession } from "@/services/learnerService";
 import {
   createSession,
-  createAttempt,
-  uploadAttemptMedia,
+  getAttempt,
   completeAttempt,
   waitForAttemptComplete,
 } from "@/services/sessionService";
-import { transcribeAudioBlob } from "@/services/sttService";
-import {
-  LANGUAGE_DIAGNOSTIC_TOPICS,
-  generateComfortableLanguageAnalysis,
-  generateEnglishAttemptAnalysis,
-  type LanguageDiagnosticTopic,
-} from "@/mock/languageDiagnostic";
+import { authJson } from "@/lib/api";
+import { analyzeRecording, languageCode } from "@/services/practiceService";
+import { signalBundleToAttemptAnalysis } from "@/lib/signalMapper";
 import type { AttemptAnalysis, Language, RoundQuestion } from "@/lib/types";
-import { delay } from "@/lib/utils";
 import { ArrowRight, BookOpen, Languages, Sparkles } from "lucide-react";
 
 type Stage = "intro" | "comfortable-question" | "comfortable-analyzing" | "english-question" | "english-analyzing" | "result";
@@ -39,178 +33,85 @@ export default function LanguageDiagnosticPage() {
   const [stage, setStage] = useState<Stage>("intro");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>("Malayalam");
-  const [selectedTopic, setSelectedTopic] = useState<LanguageDiagnosticTopic>(LANGUAGE_DIAGNOSTIC_TOPICS[0]);
+  const [selectedTopic, setSelectedTopic] = useState({ id: "custom", title: "", description: "" });
   const [comfortableResult, setComfortableResult] = useState<AttemptAnalysis | null>(null);
   const [englishResult, setEnglishResult] = useState<AttemptAnalysis | null>(null);
-  const [comfortableTranscript, setComfortableTranscript] = useState<string>("");
-  const [englishTranscript, setEnglishTranscript] = useState<string>("");
-  const [comfortableSttMetrics, setComfortableSttMetrics] = useState<any>(null);
-  const [englishSttMetrics, setEnglishSttMetrics] = useState<any>(null);
-  const [hasRecordedComfortable, setHasRecordedComfortable] = useState(false);
-  const [hasRecordedEnglish, setHasRecordedEnglish] = useState(false);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [pendingMedia, setPendingMedia] = useState<RecordingSubmitPayload | null>(null);
+  const [generatedPrompt, setGeneratedPrompt] = useState("");
+  const [englishPrompt, setEnglishPrompt] = useState("");
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
+  const comfortableAttempt = useRef<string | null>(null);
+  const startedSession = useRef<{key:string;id:string;prompt:string} | null>(null);
+  const [pendingLanguageRole,setPendingLanguageRole]=useState<"comfortable"|"english">("comfortable");
 
-  const comfortableVisualRef = useRef<any>(null);
-  const englishVisualRef = useRef<any>(null);
-
-  const comfortableQuestion: RoundQuestion = {
-    id: `lang-comfortable-${selectedTopic.id}`,
-    prompt: `Explain ${selectedTopic.title} in ${language}, the way you'd explain it to a peer or teammate.`,
-    round: "baseline",
-    pressure: "none",
-  };
-  const englishQuestion: RoundQuestion = {
-    id: `lang-english-${selectedTopic.id}`,
-    prompt: `Now explain the same concept (${selectedTopic.title}) in professional English.`,
-    round: "baseline",
-    pressure: "none",
-  };
+  const comfortableQuestion: RoundQuestion = { id: "comfortable", prompt: generatedPrompt,
+    round: "baseline", pressure: "none" };
+  const englishQuestion: RoundQuestion = { id: "english", prompt: englishPrompt,
+    round: "baseline", pressure: "none" };
 
   async function beginDiagnostic() {
-    setStage("comfortable-question");
-    comfortableVisualRef.current = null;
-    englishVisualRef.current = null;
+    if (startingRef.current) return;
+    if (!selectedTopic.title.trim()) { setFlowError("Enter a topic or concept to practice."); return; }
+    setFlowError(null);
+    startingRef.current = true; setStarting(true);
     try {
-      const sess = await createSession({
-        mode: "language-diagnostic",
-        topic: `Explain ${selectedTopic.title} (${language} vs English)`,
-        audience: "",
-        language,
-        difficulty: "Standard",
-      });
-      setSessionId(sess.id);
-    } catch (e) {
-      console.warn("Could not create language-diagnostic backend session:", e);
-    }
+      const key = JSON.stringify([selectedTopic.title.trim(), language]);
+      if (startedSession.current?.key !== key) {
+        const sess = await createSession({ mode: "language-diagnostic", topic: selectedTopic.title,
+          language, difficulty: "Standard" });
+        const prompt = sess.current_action?.question_spec?.prompt_text;
+        if (!prompt?.trim()) throw new Error("The question is not ready. Please retry.");
+        startedSession.current = {key,id:sess.id,prompt};
+      }
+      const session = startedSession.current!;
+      const translated = await authJson<{prompt:string}>(`/v1/sessions/${session.id}/english-prompt`, {method:"POST"});
+      setSessionId(session.id); setGeneratedPrompt(session.prompt); setEnglishPrompt(translated.prompt);
+      setComfortableResult(null); setEnglishResult(null); comfortableAttempt.current = null;
+      setPendingMedia(null);
+      setStage("comfortable-question");
+    } catch (err) { setFlowError(err instanceof Error ? err.message : "Could not start diagnostic."); }
+    finally { startingRef.current = false; setStarting(false); }
   }
 
-  async function handleComfortableSubmit(payload: RecordingSubmitPayload) {
-    setHasRecordedComfortable(true);
-    setStage("comfortable-analyzing");
-
-    // 1. Process CV video & audio through backend attempt
-    if (sessionId && payload.audioBlob && payload.audioBlob.size > 200) {
-      try {
-        const att = await createAttempt(sessionId, "comfortable");
-        await uploadAttemptMedia(sessionId, att.id, payload.audioBlob, payload.videoBlob);
-        await completeAttempt(sessionId, att.id);
-        const completed = await waitForAttemptComplete(sessionId, att.id, 25000);
-        if (completed?.metrics?.visual) {
-          const v = completed.metrics.visual;
-          comfortableVisualRef.current = {
-            gaze: Math.max(0, Math.min(100, Math.round((1 - v.gaze_away) * 100))),
-            posture: Math.max(0, Math.min(100, Math.round((1 - v.head_down) * 100))),
-            engagement: Math.max(0, Math.min(100, Math.round((1 - v.freeze_ratio) * 100))),
-            stressScore: Math.max(0, Math.min(100, Math.round(v.stress_score * 100))),
-          };
-        }
-      } catch (cvErr) {
-        console.warn("Comfortable CV attempt error:", cvErr);
-      }
-    }
-
-    // 2. Real Faster-Whisper transcription
-    if (payload.audioBlob && payload.audioBlob.size > 200) {
-      try {
-        const langCode = language === "Malayalam" ? "ml" : language === "Hindi" ? "hi" : "auto";
-        const res = await transcribeAudioBlob(payload.audioBlob, langCode);
-        if (res.text && res.text.trim()) {
-          setComfortableTranscript(res.text.trim());
-          setComfortableSttMetrics(res.metrics);
-        }
-      } catch (err) {
-        console.warn("Comfortable STT error:", err);
-      }
-    }
+  function handleComfortableSubmit(payload: RecordingSubmitPayload) {
+    setFlowError(null);
+    setPendingLanguageRole("comfortable"); setPendingMedia(payload); setStage("comfortable-analyzing");
   }
-
-  async function handleEnglishSubmit(payload: RecordingSubmitPayload) {
-    setHasRecordedEnglish(true);
-    setStage("english-analyzing");
-
-    // 1. Process CV video & audio through backend attempt
-    if (sessionId && payload.audioBlob && payload.audioBlob.size > 200) {
-      try {
-        const att = await createAttempt(sessionId, "english");
-        await uploadAttemptMedia(sessionId, att.id, payload.audioBlob, payload.videoBlob);
-        await completeAttempt(sessionId, att.id);
-        const completed = await waitForAttemptComplete(sessionId, att.id, 25000);
-        if (completed?.metrics?.visual) {
-          const v = completed.metrics.visual;
-          englishVisualRef.current = {
-            gaze: Math.max(0, Math.min(100, Math.round((1 - v.gaze_away) * 100))),
-            posture: Math.max(0, Math.min(100, Math.round((1 - v.head_down) * 100))),
-            engagement: Math.max(0, Math.min(100, Math.round((1 - v.freeze_ratio) * 100))),
-            stressScore: Math.max(0, Math.min(100, Math.round(v.stress_score * 100))),
-          };
-        }
-      } catch (cvErr) {
-        console.warn("English CV attempt error:", cvErr);
-      }
-    }
-
-    // 2. Real Faster-Whisper transcription
-    if (payload.audioBlob && payload.audioBlob.size > 200) {
-      try {
-        const res = await transcribeAudioBlob(payload.audioBlob, "en");
-        if (res.text && res.text.trim()) {
-          setEnglishTranscript(res.text.trim());
-          setEnglishSttMetrics(res.metrics);
-        }
-      } catch (err) {
-        console.warn("English STT error:", err);
-      }
-    }
+  function handleEnglishSubmit(payload: RecordingSubmitPayload) {
+    setFlowError(null);
+    setPendingLanguageRole("english"); setPendingMedia(payload); setStage("english-analyzing");
   }
-
   async function onComfortableAnalyzed() {
-    await delay(200);
-    const textToUse = hasRecordedComfortable ? comfortableTranscript : "";
-    const comfortable = generateComfortableLanguageAnalysis(
-      language,
-      textToUse,
-      comfortableSttMetrics,
-      comfortableVisualRef.current,
-    );
-    setComfortableResult(comfortable);
-    setStage("english-question");
+    if (!sessionId || !pendingMedia) return;
+    try {
+      const attempt = await analyzeRecording(sessionId, "comfortable", pendingMedia, languageCode(language), generatedPrompt, undefined, true);
+      comfortableAttempt.current = attempt.id;
+      setPendingMedia(null);
+      setStage("english-question");
+    } catch (err) { setFlowError(err instanceof Error ? err.message : "Analysis failed."); setStage("comfortable-question"); }
   }
-
   async function onEnglishAnalyzed() {
-    await delay(200);
-    const comfortableText = hasRecordedComfortable ? comfortableTranscript : "";
-    const englishText = hasRecordedEnglish ? englishTranscript : "";
-
-    const comfortable = comfortableResult || generateComfortableLanguageAnalysis(
-      language,
-      comfortableText,
-      comfortableSttMetrics,
-      comfortableVisualRef.current,
-    );
-    const english = generateEnglishAttemptAnalysis(
-      englishText,
-      englishSttMetrics,
-      englishVisualRef.current,
-    );
-    setComfortableResult(comfortable);
-    setEnglishResult(english);
-
-    const fullTranscript = `${comfortableText} | ${englishText}`.trim();
-    const scoreGap = comfortable.overallScore - english.overallScore;
-
-    await saveGenericSession({
-      sessionId: sessionId || undefined,
-      topic: `Language Diagnostic: ${selectedTopic.title} (${language} vs English)`,
-      mode: "language-diagnostic",
-      language,
-      difficulty: "Standard",
-      overallScore: english.overallScore,
-      scoreDelta: Math.abs(scoreGap),
-      primaryWeakness: scoreGap > 10 ? "English articulation vs conceptual knowledge" : "Vocabulary richness in English",
-      transcript: fullTranscript,
-      metrics: { comfortable, english },
-    });
-
-    setStage("result");
+    if (!sessionId || !pendingMedia) return;
+    try {
+      if (!comfortableAttempt.current) throw new Error("Record your comfortable-language answer first.");
+      const comfortableId = comfortableAttempt.current;
+      const [attempt, comfortable] = await Promise.all([
+        analyzeRecording(sessionId, "english", pendingMedia, "en", englishPrompt),
+        (async () => {
+          const saved = await getAttempt(sessionId, comfortableId);
+          if (saved.analysis_status === "failed") await completeAttempt(sessionId, comfortableId);
+          return waitForAttemptComplete(sessionId, comfortableId);
+        })(),
+      ]);
+      setComfortableResult(signalBundleToAttemptAnalysis(comfortable.metrics, comfortable.id));
+      const english = signalBundleToAttemptAnalysis(attempt.metrics, attempt.id);
+      setEnglishResult(english);
+      await saveGenericSession({ sessionId, mode: "language-diagnostic", topic: selectedTopic.title,
+        overallScore: english.overallScore, scoreDelta: 0, primaryWeakness: "Language comparison" });
+      setStage("result");
+    } catch (err) { setFlowError(err instanceof Error ? err.message : "Analysis failed."); setStage("english-question"); }
   }
 
   function finish() {
@@ -219,6 +120,7 @@ export default function LanguageDiagnosticPage() {
 
   return (
     <div className="mx-auto mt-8 w-full max-w-3xl px-4 sm:px-6">
+      {flowError && <p role="alert" className="mb-4 rounded-xl border border-rose/40 bg-paper-raised p-4 text-sm text-rose-ink">{flowError}{pendingMedia && <button className="ml-3 font-semibold underline" onClick={()=>{setFlowError(null);setStage(pendingLanguageRole==="english"?"english-analyzing":"comfortable-analyzing");}}>Retry analysis</button>}</p>}
       <AnimatePresence mode="wait">
         <motion.div
           key={stage}
@@ -241,32 +143,8 @@ export default function LanguageDiagnosticPage() {
 
               {/* Dynamic Topic Selection */}
               <div className="mx-auto mt-6 max-w-md text-left">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Select Technical Concept</p>
-                <div className="grid grid-cols-1 gap-2">
-                  {LANGUAGE_DIAGNOSTIC_TOPICS.map((topic) => {
-                    const isSelected = selectedTopic.id === topic.id;
-                    return (
-                      <button
-                        key={topic.id}
-                        type="button"
-                        onClick={() => setSelectedTopic(topic)}
-                        className={`rounded-xl border p-3.5 text-left transition-all ${
-                          isSelected
-                            ? "border-lavender-ink bg-lavender-paper/60 shadow-sm ring-1 ring-lavender-ink/20"
-                            : "border-line bg-paper-raised hover:border-line-strong"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-display text-sm font-semibold text-ink">{topic.title}</span>
-                          <Badge variant="outline" size="sm">
-                            {topic.category}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 text-xs text-ink-soft">{topic.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Topic or concept</p>
+                <input aria-label="Topic or concept" value={selectedTopic.title} onChange={(e) => setSelectedTopic({ id: "custom", title: e.target.value, description: "" })} placeholder="Enter any topic or concept" className="w-full rounded-xl border border-line bg-paper-raised px-4 py-3 text-sm text-ink outline-none focus:border-lavender-ink" />
               </div>
 
               {/* Comfortable Language Selector */}
@@ -275,8 +153,8 @@ export default function LanguageDiagnosticPage() {
                 <ChipGroup options={comfortableOptions} value={language} onChange={setLanguage} />
               </div>
 
-              <Button size="lg" className="mt-7" onClick={beginDiagnostic}>
-                Begin with &quot;{selectedTopic.title}&quot; in {language}
+              <Button size="lg" className="mt-7" disabled={starting} onClick={beginDiagnostic}>
+                {starting ? "Preparing both questions…" : <>Begin with &quot;{selectedTopic.title}&quot; in {language}</>}
                 <ArrowRight size={16} />
               </Button>
             </Card>
@@ -309,6 +187,8 @@ export default function LanguageDiagnosticPage() {
               comfortableLanguage={language}
               comfortable={comfortableResult}
               english={englishResult}
+              onRetakeEnglish={() => {setFlowError(null);setPendingMedia(null);setStage("english-question");}}
+              onRetakeBoth={() => {setFlowError(null);setPendingMedia(null);setComfortableResult(null);setEnglishResult(null);comfortableAttempt.current=null;setStage("comfortable-question");}}
               onDone={finish}
             />
           )}

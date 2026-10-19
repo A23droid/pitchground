@@ -1,0 +1,16 @@
+{
+  "version": "communication-heuristic-v4-waveform-fillers",
+  "calibrated": false,
+  "pace_reference_wpm": 140,
+  "filler_reference_per_100_words": 10,
+  "energy_variability_reference": 0.5,
+  "fluency_weights": {
+    "pace": 0.4,
+    "continuity": 0.35,
+    "fillers": 0.25
+  },
+  "presence_weights": {
+    "camera_orientation": 0.625,
+    "head_orientation": 0.375
+  }
+}

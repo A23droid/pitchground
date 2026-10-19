@@ -1,5 +1,7 @@
 # Pitchground ML contracts
 
+> Historical planning/blueprint document. For the current product audit, implementation status and remaining validation, see [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md). Demo fixtures and fixed-score examples below are not production behavior.
+
 Backend ↔ ML boundary. Joint ML work fills adapters; the orchestrator owns **when** they run. ML **does not** write SQLite, advance session phase, or call the LLM.
 
 P0: in-process Python protocols. A later process split can keep these types unchanged.

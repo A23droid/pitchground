@@ -14,7 +14,6 @@ ensure_data_dirs()
 
 
 def _build_engine():
-    global DATABASE_URL
     is_sqlite = DATABASE_URL.startswith("sqlite")
     if is_sqlite:
         return create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -31,14 +30,8 @@ def _build_engine():
         pool_size=5,
         max_overflow=2,
     )
-    try:
-        with eng.connect():
-            pass
-        return eng
-    except Exception as exc:
-        logger.warning("Remote Postgres failed (%s); falling back to local SQLite at %s", exc, DB_PATH)
-        DATABASE_URL = f"sqlite:///{DB_PATH}"
-        return create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    # A failed cloud connection must not switch accounts to a different database.
+    return eng
 
 
 engine = _build_engine()

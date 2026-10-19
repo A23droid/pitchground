@@ -31,12 +31,12 @@ export function DiagnosisPanel({ diagnosis }: { diagnosis: FailureDiagnosis }) {
           <div className="mt-5 rounded-xl border border-line bg-paper p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Diagnosis confidence</p>
-              <span className="font-mono text-xs font-semibold text-ink">{Math.round(diagnosis.confidence * 100)}%</span>
+              <span className="font-mono text-xs font-semibold text-ink">{diagnosis.confidence === null ? "Not calibrated" : `${Math.round(diagnosis.confidence * 100)}%`}</span>
             </div>
-            <Progress value={diagnosis.confidence * 100} barClassName="bg-rose-ink" />
+            <Progress value={(diagnosis.confidence ?? 0) * 100} barClassName="bg-rose-ink" />
             <p className="mt-2 text-[12px] text-muted">
-              Based on {diagnosis.occurrences} prior session{diagnosis.occurrences === 1 ? "" : "s"} showing the same
-              pattern, not a one-off read.
+              Based on {diagnosis.occurrences ?? "the available"} analyzed response{diagnosis.occurrences === 1 ? "" : "s"} in this
+              session. Confidence has not been calibrated.
             </p>
           </div>
         </div>

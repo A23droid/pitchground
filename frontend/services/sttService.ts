@@ -1,6 +1,6 @@
-import { getToken } from "@/lib/api";
+import { API_URL, getToken } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_BASE = API_URL;
 
 export interface TranscribeResult {
   text: string;
@@ -10,13 +10,14 @@ export interface TranscribeResult {
   segments: { start_sec: number; end_sec: number; text: string; language: string }[];
   metrics: {
     wpm: number;
-    filler_rate: number;
+    filler_rate: number | null;
+    filler_count: number | null;
     pause_ratio: number;
     pitch_var: number | null;
     energy_var: number;
     primary_language: string;
-    primary_ratio: number;
-    code_switch_rate: number;
+    primary_ratio: number | null;
+    code_switch_rate: number | null;
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { saveAuth, saveToken } from "@/lib/auth";
+import { completeTokenLogin } from "@/lib/auth";
 
 export default function AuthCallbackPage() {
   return (
@@ -23,15 +23,11 @@ function AuthCallback() {
       router.replace("/login?error=google");
       return;
     }
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1] || "")) as { name?: string; email?: string };
-      if (!payload.email) throw new Error("missing email");
-      saveToken(token);
-      saveAuth({ name: payload.name || payload.email.split("@")[0], email: payload.email });
-      router.replace(next.startsWith("/") ? next : "/dashboard");
-    } catch {
-      router.replace("/login?error=google");
-    }
+    let cancelled = false;
+    completeTokenLogin(token).then(() => {
+      if (!cancelled) router.replace(next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
+    }).catch(() => { if (!cancelled) router.replace("/login?error=google"); });
+    return () => { cancelled = true; };
   }, [params, router]);
 
   return (

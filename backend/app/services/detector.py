@@ -16,12 +16,13 @@ METRICS: list[tuple[str, str, bool, float]] = [
 ]
 
 
-def _get(bundle: SignalBundle, path: str) -> float:
+def _get(bundle: SignalBundle, path: str) -> float | None:
     root, leaf = path.split(".", 1)
     obj = getattr(bundle, root)
     if obj is None:
-        return 0.0
-    return float(getattr(obj, leaf))
+        return None
+    value = getattr(obj, leaf)
+    return float(value) if value is not None else None
 
 
 def detect(baseline: SignalBundle, observed: SignalBundle) -> tuple[list[Evidence], list[CandidateFailure]]:
@@ -36,8 +37,12 @@ def detect(baseline: SignalBundle, observed: SignalBundle) -> tuple[list[Evidenc
     }
 
     for path, modality, higher_worse, threshold in METRICS:
+        if path=="acoustic.filler_rate" and not all(bundle.acoustic.filler_detection.get("status")=="complete" for bundle in (baseline,observed)):
+            continue
         b = _get(baseline, path)
         o = _get(observed, path)
+        if b is None or o is None:
+            continue
         delta = o - b
         deteriorated = delta > threshold if higher_worse else (-delta) > threshold
         if not deteriorated:
@@ -64,14 +69,14 @@ def detect(baseline: SignalBundle, observed: SignalBundle) -> tuple[list[Evidenc
         if "primary_ratio" in path:
             fired_for["language_instability"].append(eid)
 
-    if observed.visual and observed.visual.freeze_ratio > 0.2:
+    if baseline.visual and observed.visual and baseline.visual.freeze_ratio is not None and observed.visual.freeze_ratio is not None and observed.visual.freeze_ratio - baseline.visual.freeze_ratio > 0.2:
         eid = str(uuid.uuid4())
         evidence.append(
             Evidence(
                 id=eid,
                 attempt_id=observed.attempt_id,
                 metric="visual.freeze_ratio",
-                delta=observed.visual.freeze_ratio,
+                delta=observed.visual.freeze_ratio - baseline.visual.freeze_ratio,
                 threshold=0.2,
                 modality="visual",
                 excerpt=None,
@@ -80,10 +85,10 @@ def detect(baseline: SignalBundle, observed: SignalBundle) -> tuple[list[Evidenc
         )
         fired_for["freeze"].append(eid)
 
-    if observed.visual and (observed.visual.gaze_away > 0.35 or observed.visual.head_down > 0.35):
+    if baseline.visual and observed.visual and all(v is not None for v in (baseline.visual.gaze_away,observed.visual.gaze_away,baseline.visual.head_down,observed.visual.head_down)) and (observed.visual.gaze_away-baseline.visual.gaze_away > 0.35 or observed.visual.head_down-baseline.visual.head_down > 0.35):
         eid = str(uuid.uuid4())
-        metric_name = "visual.gaze_away" if observed.visual.gaze_away >= observed.visual.head_down else "visual.head_down"
-        delta_val = observed.visual.gaze_away if metric_name == "visual.gaze_away" else observed.visual.head_down
+        metric_name = "visual.gaze_away" if observed.visual.gaze_away-baseline.visual.gaze_away >= observed.visual.head_down-baseline.visual.head_down else "visual.head_down"
+        delta_val = observed.visual.gaze_away-baseline.visual.gaze_away if metric_name == "visual.gaze_away" else observed.visual.head_down-baseline.visual.head_down
         evidence.append(
             Evidence(
                 id=eid,
@@ -102,23 +107,9 @@ def detect(baseline: SignalBundle, observed: SignalBundle) -> tuple[list[Evidenc
     for condition, ids in fired_for.items():
         if not ids:
             continue
-        score = min(1.0, 0.35 + 0.2 * len(ids))
+        strength = sum(abs(e.delta)/e.threshold for e in evidence if e.id in ids and e.threshold > 0)
+        score = strength/(1+strength)
         candidates.append(CandidateFailure(condition=condition, score=score, evidence_ids=ids))  # type: ignore[arg-type]
 
     candidates.sort(key=lambda c: c.score, reverse=True)
-    if not candidates:
-        eid = str(uuid.uuid4())
-        evidence.append(
-            Evidence(
-                id=eid,
-                attempt_id=observed.attempt_id,
-                metric="fused.structure",
-                delta=_get(observed, "fused.structure") - _get(baseline, "fused.structure"),
-                threshold=0.1,
-                modality="fused",
-                excerpt=None,
-                span=None,
-            )
-        )
-        candidates.append(CandidateFailure(condition="ramble", score=0.4, evidence_ids=[eid]))
     return evidence, candidates

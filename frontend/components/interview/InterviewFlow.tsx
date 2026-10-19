@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/Card";
@@ -18,7 +18,6 @@ import { ImprovementPanel } from "@/components/interview/ImprovementPanel";
 
 import { ANALYSIS_STAGES, DIAGNOSIS_STAGES, analyzeInterviewAttempt, fetchSessionComparison, fetchSessionDiagnosis } from "@/services/analysisService";
 import { fetchSessionChallenge, replayFromSession } from "@/services/challengeService";
-import { saveCompletedSession } from "@/services/learnerService";
 import {
   advanceSession,
   createAttempt,
@@ -27,7 +26,7 @@ import {
   questionFromAction,
   waitForPhase,
 } from "@/services/sessionService";
-import { topics, audiences, languages, difficulties } from "@/mock/scenarios";
+import { audiences, languages, difficulties } from "@/lib/practiceOptions";
 
 import type {
   Audience,
@@ -85,13 +84,13 @@ const stageToStep: Record<Stage, LoopStep | null> = {
 export function InterviewFlow() {
   const router = useRouter();
 
-  const [topic, setTopic] = useState(topics[0]);
+  const [topic, setTopic] = useState("");
   const [audience, setAudience] = useState<Audience>("Technical interviewer");
   const [language, setLanguage] = useState<Language>("English");
   const [difficulty, setDifficulty] = useState<Difficulty>("Standard");
 
   const config: ScenarioConfig = {
-    interviewType: "Technical Interview",
+    interviewType: "Interview",
     topic,
     audience,
     language,
@@ -113,14 +112,31 @@ export function InterviewFlow() {
   const [improvementDeltas, setImprovementDeltas] = useState<DiagnosisMetricDelta[] | null>(null);
   const [pendingMedia, setPendingMedia] = useState<RecordingSubmitPayload | null>(null);
   const [pendingRole, setPendingRole] = useState<"baseline" | "pressure" | "retry" | null>(null);
+  const attemptIds=useRef<Partial<Record<"baseline"|"pressure"|"retry",string>>>({});
+  const uploaded=useRef<Record<string,boolean>>({});
+  const transitionInFlight = useRef(false);
+  const [transitionPending, setTransitionPending] = useState(false);
+
+  async function runTransition(action: () => Promise<void>) {
+    if (transitionInFlight.current) return;
+    transitionInFlight.current = true;
+    setTransitionPending(true);
+    try {
+      await action();
+    } finally {
+      transitionInFlight.current = false;
+      setTransitionPending(false);
+    }
+  }
 
   async function beginInterview() {
     setFlowError(null);
+    if (!topic.trim()) { setFlowError("Enter a topic, role or domain to practice."); return; }
     try {
       const session = await createSession(config);
-      setSessionId(session.id);
       const prompted = await advanceSession(session.id, "created");
       setBaselineQuestion(questionFromAction(prompted.current_action, "baseline"));
+      setSessionId(prompted.id);
       setStage("intro");
     } catch (err) {
       setFlowError(err instanceof Error ? err.message : "Could not start session. Sign in and ensure the API is running.");
@@ -131,7 +147,11 @@ export function InterviewFlow() {
     if (!sessionId) return;
     setFlowError(null);
     try {
-      const session = await advanceSession(sessionId, "baseline_prompt");
+      // Recover an older screen whose question request has not committed yet.
+      let session = await getSession(sessionId);
+      if (session.phase === "created") session = await advanceSession(sessionId, "created");
+      if (session.phase === "baseline_prompt") session = await advanceSession(sessionId, "baseline_prompt");
+      if (session.phase !== "baseline_recording") throw new Error("This interview has moved on. Start a new interview to continue.");
       setBaselineQuestion(questionFromAction(session.current_action, "baseline"));
       setStage("baseline-question");
     } catch (err) {
@@ -140,6 +160,7 @@ export function InterviewFlow() {
   }
 
   async function handleBaselineSubmit(payload: RecordingSubmitPayload) {
+    delete attemptIds.current.baseline;
     setPendingMedia(payload);
     setPendingRole("baseline");
     setStage("baseline-analyzing");
@@ -148,10 +169,13 @@ export function InterviewFlow() {
   async function onBaselineAnalyzed() {
     if (!sessionId || !pendingMedia || pendingRole !== "baseline") return;
     try {
-      const attempt = await createAttempt(sessionId, "baseline");
+      const id=attemptIds.current.baseline || (await createAttempt(sessionId,"baseline")).id;
+      attemptIds.current.baseline=id;
       const result = await analyzeInterviewAttempt({
         sessionId,
-        attemptId: attempt.id,
+        attemptId: id,
+        alreadyUploaded: uploaded.current[id],
+        onUploaded: () => { uploaded.current[id]=true; },
         audioBlob: pendingMedia.audioBlob,
         videoBlob: pendingMedia.videoBlob,
       });
@@ -188,6 +212,7 @@ export function InterviewFlow() {
   }
 
   async function handlePressureSubmit(payload: RecordingSubmitPayload) {
+    delete attemptIds.current.pressure;
     setPendingMedia(payload);
     setPendingRole("pressure");
     setStage("pressure-analyzing");
@@ -196,10 +221,13 @@ export function InterviewFlow() {
   async function onPressureAnalyzed() {
     if (!sessionId || !pendingMedia || pendingRole !== "pressure") return;
     try {
-      const attempt = await createAttempt(sessionId, "pressure");
+      const id=attemptIds.current.pressure || (await createAttempt(sessionId,"pressure")).id;
+      attemptIds.current.pressure=id;
       const result = await analyzeInterviewAttempt({
         sessionId,
-        attemptId: attempt.id,
+        attemptId: id,
+        alreadyUploaded: uploaded.current[id],
+        onUploaded: () => { uploaded.current[id]=true; },
         audioBlob: pendingMedia.audioBlob,
         videoBlob: pendingMedia.videoBlob,
       });
@@ -225,6 +253,7 @@ export function InterviewFlow() {
       setStage("diagnosis");
     } catch (err) {
       setFlowError(err instanceof Error ? err.message : "Diagnosis failed.");
+      setStage("pressure-result");
     }
   }
 
@@ -253,6 +282,7 @@ export function InterviewFlow() {
   }
 
   async function handleRetrySubmit(payload: RecordingSubmitPayload) {
+    delete attemptIds.current.retry;
     setPendingMedia(payload);
     setPendingRole("retry");
     setStage("retry-analyzing");
@@ -261,14 +291,17 @@ export function InterviewFlow() {
   async function onRetryAnalyzed() {
     if (!sessionId || !pendingMedia || pendingRole !== "retry") return;
     try {
-      const attempt = await createAttempt(sessionId, "retry");
+      const id=attemptIds.current.retry || (await createAttempt(sessionId,"retry")).id;
+      attemptIds.current.retry=id;
       const result = await analyzeInterviewAttempt({
         sessionId,
-        attemptId: attempt.id,
+        attemptId: id,
+        alreadyUploaded: uploaded.current[id],
+        onUploaded: () => { uploaded.current[id]=true; },
         audioBlob: pendingMedia.audioBlob,
         videoBlob: pendingMedia.videoBlob,
       });
-      const scored = await waitForPhase(sessionId, ["comparing", "profile_updated"]);
+      const scored = await waitForPhase(sessionId, ["comparing", "profile_updated", "completed"]);
       if (scored.phase === "comparing") {
         await advanceSession(sessionId, "comparing");
       }
@@ -293,16 +326,8 @@ export function InterviewFlow() {
         if (after.phase === "profile_updated") await advanceSession(sessionId, "profile_updated");
       } catch (err) {
         setFlowError(err instanceof Error ? err.message : "Could not mark session completed.");
+        return;
       }
-    }
-    if (pressureAnalysis && retryAnalysis) {
-      saveCompletedSession({
-        topic: config.topic,
-        overallScoreBefore: pressureAnalysis.overallScore,
-        overallScoreAfter: retryAnalysis.overallScore,
-        structureBefore: pressureAnalysis.communication.structure,
-        structureAfter: retryAnalysis.communication.structure,
-      });
     }
     setStage("done");
   }
@@ -320,17 +345,21 @@ export function InterviewFlow() {
         )}
 
         {flowError && (
-          <p className="mb-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-sm text-rose-ink">{flowError}</p>
+          <p className="mb-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-sm text-rose-ink">{flowError}
+            {pendingMedia && pendingRole && <button className="ml-3 font-semibold underline" onClick={()=>{ setFlowError(null);setStage(pendingRole==="baseline"?"baseline-analyzing":pendingRole==="pressure"?"pressure-analyzing":"retry-analyzing"); }}>Retry analysis</button>}
+          </p>
         )}
 
         <AnimatePresence mode="wait">
           <motion.div
             key={stage}
+            aria-busy={transitionPending}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
           >
+            <fieldset disabled={transitionPending} className="min-w-0 border-0 p-0">
             {stage === "setup" && (
               <SetupCard
                 topic={topic}
@@ -341,11 +370,11 @@ export function InterviewFlow() {
                 setLanguage={setLanguage}
                 difficulty={difficulty}
                 setDifficulty={setDifficulty}
-                onBegin={() => void beginInterview()}
+                onBegin={() => void runTransition(beginInterview)}
               />
             )}
 
-            {stage === "intro" && <IntroCard config={config} onStart={() => void startBaselineRecording()} />}
+            {stage === "intro" && <IntroCard config={config} onStart={() => void runTransition(startBaselineRecording)} />}
 
             {stage === "baseline-question" && baselineQuestion && (
               <RecordingPanel question={baselineQuestion} language={config.language} onSubmit={handleBaselineSubmit} />
@@ -356,14 +385,14 @@ export function InterviewFlow() {
             {stage === "baseline-result" && baselineAnalysis && (
               <ResultStep
                 title="Baseline round complete"
-                note="Strong, unhurried performance. Now Pitchground introduces pressure."
+                note="Your baseline has been measured. Now Pitchground introduces pressure."
                 analysis={baselineAnalysis}
                 ctaLabel="Introduce pressure round"
-                onNext={() => void startPressureRound()}
+                onNext={() => void runTransition(startPressureRound)}
               />
             )}
 
-            {stage === "pressure-intro" && <PressureIntroCard onStart={() => void enterPressureRecording()} />}
+            {stage === "pressure-intro" && <PressureIntroCard onStart={() => void runTransition(enterPressureRecording)} />}
 
             {stage === "pressure-question" && pressureQuestion && (
               <RecordingPanel question={pressureQuestion} language={config.language} onSubmit={handlePressureSubmit} />
@@ -395,10 +424,10 @@ export function InterviewFlow() {
               </div>
             )}
 
-            {stage === "challenge" && challenge && <ChallengePanel challenge={challenge} onPractice={() => void startReplay()} />}
+            {stage === "challenge" && challenge && <ChallengePanel challenge={challenge} onPractice={() => void runTransition(startReplay)} />}
 
             {stage === "replay-intro" && replayConditions && (
-              <ReplayPanel conditions={replayConditions} onReplay={() => void enterRetryRecording()} />
+              <ReplayPanel conditions={replayConditions} onReplay={() => void runTransition(enterRetryRecording)} />
             )}
 
             {stage === "replay-question" && replayQuestion && (
@@ -412,11 +441,12 @@ export function InterviewFlow() {
                 deltas={improvementDeltas}
                 scoreBefore={pressureAnalysis.overallScore}
                 scoreAfter={retryAnalysis.overallScore}
-                onDone={() => void finishSession()}
+                onDone={() => void runTransition(finishSession)}
               />
             )}
 
             {stage === "done" && <DoneCard onDashboard={() => router.push("/dashboard")} onProfile={() => router.push("/profile")} />}
+            </fieldset>
           </motion.div>
         </AnimatePresence>
       </div>
@@ -457,7 +487,7 @@ function SetupCard({
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Topic</h2>
-          <Select options={topics.map((t) => ({ label: t, value: t }))} value={topic} onChange={(e) => setTopic(e.target.value)} />
+          <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Enter a topic, role or domain" aria-label="Interview topic" className="w-full rounded-xl border border-line bg-paper-raised px-4 py-3 text-sm text-ink outline-none focus:border-lavender-ink" />
         </div>
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Audience</h2>
@@ -519,7 +549,7 @@ function IntroCard({ config, onStart }: { config: ScenarioConfig; onStart: () =>
           <Video size={13} /> Camera optional
         </span>
         <span className="flex items-center gap-1.5">
-          <Mic size={13} /> Mic optional
+          <Mic size={13} /> Microphone required
         </span>
       </div>
       <Button size="lg" className="mt-7" onClick={onStart}>

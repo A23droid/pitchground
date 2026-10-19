@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_URL } from "@/lib/api";
-import { getAuth, getToken, saveAuth } from "@/lib/auth";
+import { clearAuth, getToken, saveAuth } from "@/lib/auth";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,22 +21,22 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.ok) {
-            const user = (await res.json()) as { name: string; email: string };
-            saveAuth(user);
+            const user = (await res.json()) as { name: string; email: string; learner_id: string };
+            saveAuth({ name: user.name, email: user.email, learnerId: user.learner_id });
             if (!cancelled) setReady(true);
             return;
           }
+          if (res.status !== 401 && res.status !== 403) {
+            throw new Error("The sign-in service is unavailable. Please try again.");
+          }
         } catch {
-          // fall through to local demo session
+          if (!cancelled) setError("Cannot verify your session. Check that the API is running, then retry.");
+          return;
         }
       }
 
-      const local = getAuth();
-      if (!local) {
-        router.replace("/login");
-        return;
-      }
-      if (!cancelled) setReady(true);
+      clearAuth();
+      router.replace("/login");
     }
 
     void check();
@@ -43,6 +44,13 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, [router]);
+
+  if (error) return (
+    <div className="mx-auto mt-8 max-w-md rounded-2xl border border-line bg-paper-raised p-6 text-sm text-ink-soft" role="alert">
+      <p>{error}</p>
+      <button className="mt-4 font-semibold text-lavender-ink" onClick={() => window.location.reload()}>Retry</button>
+    </div>
+  );
 
   if (!ready) {
     return (
