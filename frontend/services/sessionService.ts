@@ -80,7 +80,7 @@ export async function advanceSession(sessionId: string, fromPhase: string): Prom
 
 export async function createAttempt(
   sessionId: string,
-  role: "baseline" | "pressure" | "retry",
+  role: "baseline" | "pressure" | "retry" | string,
 ): Promise<BackendAttempt> {
   return authJson<BackendAttempt>(`/v1/sessions/${sessionId}/attempts`, {
     method: "POST",

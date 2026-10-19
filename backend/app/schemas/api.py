@@ -33,7 +33,7 @@ class AdvanceBody(BaseModel):
 
 
 class AttemptCreate(BaseModel):
-    role: Literal["baseline", "pressure", "retry"]
+    role: str = "baseline"
 
 
 class SessionFinish(BaseModel):

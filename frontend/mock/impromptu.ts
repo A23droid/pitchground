@@ -81,6 +81,7 @@ export function generateImpromptuAnalysis(
   config: ImpromptuConfig,
   transcript?: string,
   sttMetrics?: { wpm?: number; filler_rate?: number; pause_ratio?: number; code_switch_rate?: number } | null,
+  visualMetrics?: ImpromptuAnalysis["visualMetrics"] | null,
 ): ImpromptuAnalysis {
   const duration = config.durationSeconds;
   const isMultilingual = config.language !== "English";
@@ -178,7 +179,10 @@ export function generateImpromptuAnalysis(
 
   // 8. Overall score calculation
   const pacingScore = Math.max(15, Math.min(100, 100 - Math.abs(measuredWpm - 135) * 0.5 - fillerCount * 2));
-  const overallScore = Math.round(0.35 * coherence + 0.35 * lexicalDiversity + 0.30 * pacingScore);
+  const visualScore = visualMetrics ? Math.round((visualMetrics.eyeContact + visualMetrics.posture + visualMetrics.composure) / 3) : null;
+  const overallScore = visualScore !== null
+    ? Math.round(0.30 * coherence + 0.30 * lexicalDiversity + 0.25 * pacingScore + 0.15 * visualScore)
+    : Math.round(0.35 * coherence + 0.35 * lexicalDiversity + 0.30 * pacingScore);
 
   return {
     fluencyTimeline: timeline,
@@ -191,6 +195,7 @@ export function generateImpromptuAnalysis(
     overallScore,
     language: config.language,
     codeSwitchingDetected: sttMetrics?.code_switch_rate !== undefined ? sttMetrics.code_switch_rate > 0.15 : config.language === "Mixed",
+    visualMetrics: visualMetrics || undefined,
   };
 }
 

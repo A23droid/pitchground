@@ -128,6 +128,56 @@ export function DebateReportPanel({
         </div>
       </div>
 
+      {/* Computer Vision & Physical Composure (Real CV Model) */}
+      {analysis.visualPresence && (
+        <Card className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              <span className="h-2 w-2 rounded-full bg-lavender-ink animate-pulse" />
+              Computer Vision & Physical Composure
+            </span>
+            <Badge
+              variant={
+                analysis.visualPresence.stressLevel <= 30
+                  ? "teal"
+                  : analysis.visualPresence.stressLevel <= 60
+                  ? "amber"
+                  : "rose"
+              }
+              size="sm"
+            >
+              {analysis.visualPresence.stressLevel <= 30
+                ? "Low Physical Stress"
+                : analysis.visualPresence.stressLevel <= 60
+                ? "Moderate Tension"
+                : "High Physical Stress"} ({analysis.visualPresence.stressLevel}%)
+            </Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Eye Contact Stability</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.eyeContact}%</p>
+              <p className="text-[10px] text-ink-soft">Direct opponent address</p>
+            </div>
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Posture & Head Up</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.posture}%</p>
+              <p className="text-[10px] text-ink-soft">Steadiness under attack</p>
+            </div>
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Active Composure</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.composure}%</p>
+              <p className="text-[10px] text-ink-soft">Low freeze ratio</p>
+            </div>
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Stress Index</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-amber-ink">{analysis.visualPresence.stressLevel}%</p>
+              <p className="text-[10px] text-ink-soft">Dynamic optical motion</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Failure Diagnosis */}
       <DiagnosisPanel diagnosis={diagnosis} />
 

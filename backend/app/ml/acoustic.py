@@ -21,10 +21,28 @@ class AcousticExtractor:
         if not path.exists() or path.stat().st_size < 500:
             return AcousticSignals(wpm=0.0, pause_ratio=1.0, filler_rate=0.0, pitch_var=None, energy_var=0.0, silence_burst_count=0), 0.0
 
+        y = None
+        sr = 16000
         try:
             y, sr = librosa.load(str(path), sr=16000, mono=True)
-        except Exception as exc:
-            logger.warning("Failed to load audio %s with librosa: %s", path, exc)
+        except Exception:
+            try:
+                import av
+                container = av.open(str(path))
+                resampler = av.AudioResampler(format="fltp", layout="mono", rate=16000)
+                chunks = []
+                for frame in container.decode(audio=0):
+                    resampled = resampler.resample(frame)
+                    if resampled:
+                        chunks.append(resampled.to_ndarray()[0])
+                container.close()
+                if chunks:
+                    y = np.concatenate(chunks).astype(np.float32)
+            except Exception as exc:
+                logger.warning("Failed to load audio %s with librosa/av: %s", path, exc)
+                return AcousticSignals(wpm=0.0, pause_ratio=1.0, filler_rate=0.0, pitch_var=None, energy_var=0.0, silence_burst_count=0), 0.0
+
+        if y is None or len(y) == 0:
             return AcousticSignals(wpm=0.0, pause_ratio=1.0, filler_rate=0.0, pitch_var=None, energy_var=0.0, silence_burst_count=0), 0.0
 
         total_duration = float(librosa.get_duration(y=y, sr=sr))

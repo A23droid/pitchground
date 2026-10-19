@@ -48,7 +48,7 @@ class AnalysisConfig(BaseModel):
     question_key_points: list[str] = Field(default_factory=list)
     sample_fps: float = 5
     skip_vision: bool = True
-    role: Literal["baseline", "pressure", "retry"] = "baseline"
+    role: str = "baseline"
 
 
 class AcousticSignals(BaseModel):

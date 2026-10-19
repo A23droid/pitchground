@@ -28,15 +28,40 @@ export async function getDebateTopics(): Promise<DebateTopic[]> {
   return DEBATE_TOPICS;
 }
 
+import { authFetch } from "@/lib/api";
+
 export async function generateAiOpponentTurn(
   topicId: string,
   config: DebateConfig,
+  turn: number = 1,
+  userTranscript: string = "",
 ): Promise<{ counterArgumentText: string }> {
-  // Simulate AI opponent thinking & formulating counter-argument
-  await delay(1200);
+  try {
+    const res = await authFetch("/v1/debate/counter", {
+      method: "POST",
+      body: JSON.stringify({
+        topic: config.topic.title,
+        user_position: config.position,
+        language: config.language,
+        difficulty: config.difficulty,
+        user_transcript: userTranscript,
+        turn,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.counter_argument) {
+        return { counterArgumentText: data.counter_argument };
+      }
+    }
+  } catch (err) {
+    console.warn("Dynamic debate counter API error:", err);
+  }
+
+  // Dynamic fallback based on topic and language
   const script = getDebateScript(topicId, config.language);
   return {
-    counterArgumentText: script.aiCounter,
+    counterArgumentText: turn === 1 ? script.aiCounter : script.aiCounter2,
   };
 }
 

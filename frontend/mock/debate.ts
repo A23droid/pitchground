@@ -233,9 +233,28 @@ export function generateDebateAnalysis(config: DebateConfig, rounds?: DebateRoun
   const codeSwitchingRatio = isMultilingual ? Math.min(100, Math.round((latinCount / totalChars) * 100)) : 0;
   const languageFidelity = isMultilingual ? (totalChars > 1 ? Math.min(100, Math.max(10, Math.round((indicCount / totalChars) * 100))) : 0) : 100;
 
-  // 7. Overall score
+  // 7. Visual presence from real CV Model (if video was captured)
+  const roundVisuals = rounds?.map((r) => r.visualMetrics).filter(Boolean) || [];
+  let visualPresence: DebateAnalysis["visualPresence"] = undefined;
+  if (roundVisuals.length > 0) {
+    const avgGazeAway = roundVisuals.reduce((acc, v) => acc + (v?.gaze_away ?? 0), 0) / roundVisuals.length;
+    const avgHeadDown = roundVisuals.reduce((acc, v) => acc + (v?.head_down ?? 0), 0) / roundVisuals.length;
+    const avgFreeze = roundVisuals.reduce((acc, v) => acc + (v?.freeze_ratio ?? 0), 0) / roundVisuals.length;
+    const avgStress = roundVisuals.reduce((acc, v) => acc + (v?.stress_score ?? 0), 0) / roundVisuals.length;
+    visualPresence = {
+      eyeContact: Math.max(0, Math.min(100, Math.round((1 - avgGazeAway) * 100))),
+      posture: Math.max(0, Math.min(100, Math.round((1 - avgHeadDown) * 100))),
+      composure: Math.max(0, Math.min(100, Math.round((1 - avgFreeze) * 100))),
+      stressLevel: Math.max(0, Math.min(100, Math.round(avgStress * 100))),
+    };
+  }
+
+  // 8. Overall score with visual presence integration
+  const visualScore = visualPresence ? Math.round((visualPresence.eyeContact + visualPresence.posture + visualPresence.composure) / 3) : null;
   const overallScore = (openWordCount > 0 || rebutWordCount > 0)
-    ? Math.round(0.30 * argumentation + 0.30 * rebuttal + 0.20 * communication + 0.20 * pressureHandling)
+    ? visualScore !== null
+      ? Math.round(0.25 * argumentation + 0.25 * rebuttal + 0.20 * communication + 0.15 * pressureHandling + 0.15 * visualScore)
+      : Math.round(0.30 * argumentation + 0.30 * rebuttal + 0.20 * communication + 0.20 * pressureHandling)
     : 0;
 
   const keyObservation =
@@ -254,6 +273,7 @@ export function generateDebateAnalysis(config: DebateConfig, rounds?: DebateRoun
     openingScore,
     rebuttalScore,
     keyObservation,
+    visualPresence,
   };
 }
 
