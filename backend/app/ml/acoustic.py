@@ -7,6 +7,7 @@ import numpy as np
 
 from app.ml.types import AcousticSignals
 from app.storage.media import resolve_local_path
+from app.ml.speech_quality import lexical_words
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +15,12 @@ logger = logging.getLogger(__name__)
 class AcousticExtractor:
     """Extracts acoustic prosody, speech pace (WPM), silence hesitations, and speaking score from real audio."""
 
-    def extract(self, audio_path: str, transcript_text: str) -> tuple[AcousticSignals, float]:
+    def extract(self, audio_path: str, transcript_text: str) -> tuple[AcousticSignals, float | None]:
         local_path = resolve_local_path(audio_path)
         path = Path(local_path) if local_path else Path(audio_path)
 
         if not path.exists() or path.stat().st_size < 500:
-            return AcousticSignals(wpm=0.0, pause_ratio=1.0, filler_rate=0.0, pitch_var=None, energy_var=0.0, silence_burst_count=0), 0.0
+            raise ValueError("The audio is missing, unreadable or too short for analysis.")
 
         y = None
         sr = 16000
@@ -33,24 +34,27 @@ class AcousticExtractor:
                 chunks = []
                 for frame in container.decode(audio=0):
                     resampled = resampler.resample(frame)
-                    if resampled:
-                        chunks.append(resampled.to_ndarray()[0])
+                    for output_frame in resampled:
+                        chunks.append(output_frame.to_ndarray()[0])
                 container.close()
                 if chunks:
                     y = np.concatenate(chunks).astype(np.float32)
             except Exception as exc:
                 logger.warning("Failed to load audio %s with librosa/av: %s", path, exc)
-                return AcousticSignals(wpm=0.0, pause_ratio=1.0, filler_rate=0.0, pitch_var=None, energy_var=0.0, silence_burst_count=0), 0.0
+                raise ValueError("The audio is missing, unreadable or too short for analysis.")
 
         if y is None or len(y) == 0:
-            return AcousticSignals(wpm=0.0, pause_ratio=1.0, filler_rate=0.0, pitch_var=None, energy_var=0.0, silence_burst_count=0), 0.0
+            raise ValueError("The audio is missing, unreadable or too short for analysis.")
 
         total_duration = float(librosa.get_duration(y=y, sr=sr))
         if total_duration < 0.3:
-            return AcousticSignals(wpm=0.0, pause_ratio=1.0, filler_rate=0.0, pitch_var=None, energy_var=0.0, silence_burst_count=0), 0.0
+            raise ValueError("The audio is missing, unreadable or too short for analysis.")
 
-        # 1. Voice Activity Detection (top_db=25 threshold)
-        intervals = librosa.effects.split(y, top_db=25)
+        # Neural speech detection distinguishes speech from energy/noise. Keep original times.
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
+        spans = get_speech_timestamps(y, VadOptions(threshold=.35, min_speech_duration_ms=100,
+            min_silence_duration_ms=500, speech_pad_ms=200), sampling_rate=sr) if np.max(np.abs(y)) > 1e-5 else []
+        intervals = np.array([[s["start"], s["end"]] for s in spans], dtype=int).reshape(-1, 2)
         speech_duration = float(sum((end - start) / sr for start, end in intervals)) if len(intervals) > 0 else 0.0
         silence_duration = max(0.0, total_duration - speech_duration)
         pause_ratio = round(min(1.0, silence_duration / max(total_duration, 1e-4)), 3)
@@ -63,11 +67,10 @@ class AcousticExtractor:
                 silence_burst_count += 1
 
         # 3. Words Per Minute (WPM) calculated from actual transcribed words
-        words = [w for w in transcript_text.split() if w.strip() and not (w.startswith("[") and w.endswith("]"))]
-        if speech_duration > 0.4 and len(words) > 0:
-            wpm = round(len(words) / (speech_duration / 60.0), 1)
-        else:
-            wpm = 0.0
+        words = lexical_words(transcript_text)
+        # Speaking rate includes pauses; articulation rate is a separate diagnostic.
+        wpm = round(len(words)*60/total_duration, 1) if speech_duration > 0 and words else 0.0
+        articulation_wpm = round(len(words)*60/speech_duration, 1) if speech_duration > 0 and words else None
 
         # 4. Pitch variability (F0 via Yin algorithm over voiced frames)
         pitch_var: float | None = None
@@ -83,21 +86,17 @@ class AcousticExtractor:
         rms = librosa.feature.rms(y=y)[0]
         energy_var = round(float(np.std(rms)), 3) if len(rms) > 0 else 0.0
 
-        # 6. Composite Speaking Score (0 to 100)
-        if len(words) == 0 or speech_duration < 0.4:
-            speaking_score = 0.0
-        else:
-            # Optimal speaking rate is 125-150 WPM
-            pacing_penalty = abs(wpm - 135.0) * 0.4
-            pause_penalty = max(0.0, pause_ratio - 0.20) * 60.0
-            burst_penalty = min(20.0, silence_burst_count * 3.0)
-            speaking_score = max(0.0, min(100.0, 100.0 - (pacing_penalty + pause_penalty + burst_penalty)))
-
         return AcousticSignals(
             wpm=wpm,
+            articulation_wpm=articulation_wpm,
+            word_count=len(words),
             pause_ratio=pause_ratio,
-            filler_rate=0.0,  # Filled dynamically by LanguageExtractor
+            filler_rate=None,  # Requires the independent waveform filler detector.
             pitch_var=pitch_var,
             energy_var=energy_var,
             silence_burst_count=silence_burst_count,
-        ), round(speaking_score, 1)
+            duration_sec=total_duration,
+            speech_duration_sec=speech_duration,
+            pause_count=max(0, len(intervals) - 1),
+            response_latency_sec=float(intervals[0][0] / sr) if len(intervals) else None,
+        ), None

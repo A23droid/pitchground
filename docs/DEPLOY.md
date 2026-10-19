@@ -1,5 +1,7 @@
 # Deploy environment matrix
 
+> Historical demo deployment plan. Production no longer supports stub metrics or silent database/storage fallback. See [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md) and the current backend README.
+
 ## Local backend (`backend/.env`)
 
 | Variable | Example |

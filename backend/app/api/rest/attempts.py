@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_learner
-from app.models import Attempt, EvidenceRow, Learner, Session as SessionModel
+from app.models import Attempt, EvidenceRow, Learner, SessionEvent, Session as SessionModel
 from app.orchestration.orchestrator import analyze_attempt_job, create_attempt
 from app.schemas.api import AttemptCreate
 from app.storage.media import save_upload
+from app.ml.speech_quality import SPEECH_PIPELINE_VERSION
 
 router = APIRouter(prefix="/v1/sessions/{session_id}/attempts", tags=["attempts"])
 
@@ -33,7 +34,7 @@ def post_attempt(
 ):
     session = _session(db, session_id, learner)
     try:
-        attempt = create_attempt(db, session, body.role)
+        attempt = create_attempt(db, session, body.role, body.language, body.prompt, body.interruption_sec)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
@@ -41,7 +42,7 @@ def post_attempt(
         "session_id": attempt.session_id,
         "role": attempt.role,
         "prompt": attempt.prompt,
-        "pressure_spec": json.loads(attempt.pressure_spec_json or "{}"),
+        "pressure_spec": {k: v for k,v in json.loads(attempt.pressure_spec_json or "{}").items() if k != "answer_rubric"},
     }
 
 
@@ -59,6 +60,8 @@ async def upload_media(
     if not attempt or attempt.session_id != session.id:
         raise HTTPException(status_code=404, detail="Attempt not found")
 
+    if attempt.analysis_status not in ("pending", "failed"):
+        raise HTTPException(status_code=409, detail="This recording is already queued or analyzed.")
     audio_bytes = await audio.read()
     if len(audio_bytes) < 200:
         raise HTTPException(status_code=415, detail="Media missing usable audio")
@@ -76,6 +79,9 @@ async def upload_media(
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    if attempt.transcript:
+        db.delete(attempt.transcript)
+        attempt.transcript=None
     attempt.audio_path = audio_path
     attempt.video_path = video_path
     db.commit()
@@ -101,6 +107,8 @@ def complete_attempt(
         raise HTTPException(status_code=404, detail="Attempt not found")
     if not attempt.audio_path:
         raise HTTPException(status_code=415, detail="Media missing audio")
+    if attempt.analysis_status in ("queued", "complete"):
+        return {"attempt_id": attempt_id, "analysis_status": attempt.analysis_status}
     attempt.analysis_status = "queued"
     db.commit()
     background.add_task(analyze_attempt_job, session_id, attempt_id)
@@ -136,11 +144,19 @@ def get_attempt(
         except Exception:
             pass
 
+    error = None
+    if attempt.analysis_status == "failed":
+        events = db.query(SessionEvent).filter(SessionEvent.session_id == session.id, SessionEvent.event_type == "analysis_failed").order_by(SessionEvent.created_at.desc()).all()
+        error = next((payload for event in events if (payload := json.loads(event.payload_json)).get("attempt_id") == attempt.id), None)
     return {
+        "analysis_error": error,
+        "transcript_validated": bool(attempt.transcript and attempt.transcript.text.strip() and
+            json.loads(attempt.pressure_spec_json or "{}").get("transcription", {}).get("pipeline_version")
+            == SPEECH_PIPELINE_VERSION),
         "id": attempt.id,
         "role": attempt.role,
         "prompt": attempt.prompt,
-        "pressure_spec": json.loads(attempt.pressure_spec_json or "{}"),
+        "pressure_spec": {k: v for k,v in json.loads(attempt.pressure_spec_json or "{}").items() if k != "answer_rubric"},
         "transcript": {
             "text": attempt.transcript.text,
             "language": attempt.transcript.language,
@@ -151,3 +167,15 @@ def get_attempt(
         "evidence": evidence_list,
         "analysis_status": attempt.analysis_status,
     }
+
+
+@router.get("/{attempt_id}/recovery")
+def recovery_result(session_id: str, attempt_id: str, db: Session = Depends(get_db), learner: Learner = Depends(get_current_learner)):
+    session = _session(db, session_id, learner)
+    attempt = db.get(Attempt, attempt_id)
+    if not attempt or attempt.session_id != session.id or not attempt.metrics:
+        raise HTTPException(status_code=404, detail="Recovery analysis not available")
+    data = json.loads(attempt.metrics.signal_bundle_json).get("recovery")
+    if not data:
+        raise HTTPException(status_code=409, detail="Record speech before and after an interruption first.")
+    return data

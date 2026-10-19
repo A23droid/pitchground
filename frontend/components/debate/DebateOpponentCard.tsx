@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Bot, Volume2, ShieldAlert } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -11,36 +10,13 @@ export function DebateOpponentCard({
   position,
   counterArgument,
   isSpeaking,
-  onFinishedSpeaking,
 }: {
   position: DebatePosition;
   counterArgument: string;
   isSpeaking: boolean;
-  onFinishedSpeaking?: () => void;
 }) {
-  const [typedText, setTypedText] = useState("");
   const opponentPosition: DebatePosition = position === "For" ? "Against" : "For";
 
-  useEffect(() => {
-    if (!isSpeaking) {
-      setTypedText(counterArgument);
-      return;
-    }
-    setTypedText("");
-    let i = 0;
-    const interval = setInterval(() => {
-      i += 3;
-      setTypedText(counterArgument.slice(0, i));
-      if (i >= counterArgument.length) {
-        clearInterval(interval);
-        if (onFinishedSpeaking) {
-          setTimeout(onFinishedSpeaking, 600);
-        }
-      }
-    }, 18);
-
-    return () => clearInterval(interval);
-  }, [counterArgument, isSpeaking, onFinishedSpeaking]);
 
   return (
     <Card className="relative overflow-hidden border-lavender/50 bg-lavender/15 p-5 sm:p-6">
@@ -74,7 +50,7 @@ export function DebateOpponentCard({
           Direct Counter-Argument
         </div>
         <p className="min-h-[72px] text-sm leading-relaxed text-ink">
-          {typedText}
+          {counterArgument}
           {isSpeaking && <span className="animate-pulse font-mono font-bold text-ink">▍</span>}
         </p>
       </div>

@@ -48,7 +48,7 @@ export function ImpromptuReportPanel({
                 <Clock size={11} /> {config.durationSeconds}s Duration
               </Badge>
               <Badge variant="outline" size="sm">
-                {config.language}
+                Spoken: {analysis.language}
               </Badge>
             </div>
             <h1 className="mt-0 font-display text-2xl font-semibold text-ink sm:mt-2 sm:text-3xl">
@@ -60,7 +60,7 @@ export function ImpromptuReportPanel({
           </div>
 
           <div className="mt-4 sm:mt-0 sm:text-right w-full sm:w-auto border-t border-line pt-4 sm:border-0 sm:pt-0">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Overall Fluency</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Overall practice score</p>
             <p className="font-display text-3xl font-bold text-ink sm:text-4xl">
               {analysis.overallScore}
               <span className="text-sm font-normal text-muted">/100</span>
@@ -77,7 +77,7 @@ export function ImpromptuReportPanel({
             </span>
             <span className="flex items-center gap-1 text-xs text-rose font-medium">
               <TrendingDown size={13} />
-              {analysis.initialWpm - analysis.finalWpm} WPM Drop in 2nd half
+              {analysis.finalWpm - analysis.initialWpm} WPM change between first and last window
             </span>
           </div>
 
@@ -92,7 +92,7 @@ export function ImpromptuReportPanel({
                       className={`w-full rounded-md transition-all ${
                         isDecaying ? "bg-amber/80" : "bg-teal/80"
                       }`}
-                      style={{ height: `${(pt.wpm / 160) * 100}%` }}
+                      style={{ height: `${Math.min(100, pt.wpm / Math.max(1,...analysis.fluencyTimeline.map((p) => p.wpm)) * 100)}%` }}
                     />
                   </div>
                   <span className="font-mono text-[10px] font-semibold text-ink">{pt.wpm} wpm</span>
@@ -109,10 +109,10 @@ export function ImpromptuReportPanel({
 
           <div className="mt-4 flex items-center gap-4 text-xs text-muted">
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-teal" /> High Fluency (0-20s)
+              <span className="h-2 w-2 rounded-full bg-teal" /> Lower repetition
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-amber" /> Lexical Decay & Hesitation (30s+)
+              <span className="h-2 w-2 rounded-full bg-amber" /> Higher repetition
             </span>
           </div>
         </div>
@@ -123,25 +123,25 @@ export function ImpromptuReportPanel({
         <div className="min-w-0 rounded-2xl border border-line bg-paper-raised p-4">
           <span className="text-xs font-medium text-muted">Initial Pace</span>
           <p className="mt-1 font-display text-2xl font-bold text-teal-ink">{analysis.initialWpm} WPM</p>
-          <p className="mt-1 text-[11px] text-ink-soft">Strong opening velocity without hesitation</p>
+          <p className="mt-1 text-[11px] text-ink-soft">Measured in the first transcript window</p>
         </div>
 
         <div className="min-w-0 rounded-2xl border border-amber/40 bg-paper-raised p-4">
           <span className="text-xs font-medium text-muted">Late Phase Pace</span>
           <p className="mt-1 font-display text-2xl font-bold text-amber-ink">{analysis.finalWpm} WPM</p>
-          <p className="mt-1 text-[11px] text-ink-soft">Decay after initial concept exhaust</p>
+          <p className="mt-1 text-[11px] text-ink-soft">Measured in the final transcript window</p>
         </div>
 
         <div className="min-w-0 rounded-2xl border border-rose/40 bg-paper-raised p-4">
-          <span className="text-xs font-medium text-muted">Circular Repetitions</span>
+          <span className="text-xs font-medium text-muted">Repeated words</span>
           <p className="mt-1 font-display text-2xl font-bold text-rose">{analysis.repetitionCount} times</p>
-          <p className="mt-1 text-[11px] text-ink-soft">Re-stating same point in loops</p>
+          <p className="mt-1 text-[11px] text-ink-soft">Consecutive repeated words</p>
         </div>
 
         <div className="min-w-0 rounded-2xl border border-line bg-paper-raised p-4">
-          <span className="text-xs font-medium text-muted">Late Fillers</span>
-          <p className="mt-1 font-display text-2xl font-bold text-ink">{analysis.fillerCount}</p>
-          <p className="mt-1 text-[11px] text-ink-soft">Searching for next words</p>
+          <span className="text-xs font-medium text-muted">Vocal Fillers</span>
+          <p className="mt-1 font-display text-2xl font-bold text-ink">{analysis.fillerCount ?? "Not measured"}</p>
+          <p className="mt-1 text-[11px] text-ink-soft">Estimated from audio and transcript evidence</p>
         </div>
 
         <div className="min-w-0 rounded-2xl border border-line bg-paper-raised p-4">
@@ -156,12 +156,10 @@ export function ImpromptuReportPanel({
             <Languages size={13} className="text-muted" />
           </div>
           <p className="mt-1 min-w-0 font-display text-lg font-bold text-ink break-words hyphens-auto [overflow-wrap:anywhere] sm:text-2xl">
-            {analysis.codeSwitchingDetected ? "Active" : "Monolingual"}
+            {analysis.codeSwitchingDetected == null ? "Not measured" : analysis.codeSwitchingDetected ? "Detected" : "Not detected"}
           </p>
           <p className="mt-1 text-[11px] text-ink-soft">
-            {analysis.codeSwitchingDetected
-              ? "Evaluated smoothly across technical terms without penalization."
-              : "Single language stream."}
+            Script-based estimate from the recorded transcript.
           </p>
         </div>
       </div>
@@ -176,7 +174,7 @@ export function ImpromptuReportPanel({
             </span>
             <Badge
               variant={
-                analysis.visualMetrics.stressScore <= 30
+                analysis.visualMetrics.stressScore == null || analysis.visualMetrics.stressScore <= 30
                   ? "teal"
                   : analysis.visualMetrics.stressScore <= 60
                   ? "amber"
@@ -184,47 +182,52 @@ export function ImpromptuReportPanel({
               }
               size="sm"
             >
-              {analysis.visualMetrics.stressScore <= 30
-                ? "Relaxed Delivery"
-                : analysis.visualMetrics.stressScore <= 60
-                ? "Moderate Stress"
-                : "High Physical Stress"} ({analysis.visualMetrics.stressScore}%)
+              Tension estimate ({analysis.visualMetrics.stressScore ?? "Not measured"})
             </Badge>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-xl border border-line bg-paper-raised p-3">
               <span className="text-[11px] text-muted">Camera Eye Contact</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.eyeContact}%</p>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.eyeContact == null ? "Not measured" : `${analysis.visualMetrics.eyeContact}%`}</p>
               <p className="text-[10px] text-ink-soft">Direct lens engagement</p>
             </div>
             <div className="rounded-xl border border-line bg-paper-raised p-3">
               <span className="text-[11px] text-muted">Posture Alignment</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.posture}%</p>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.posture == null ? "Not measured" : `${analysis.visualMetrics.posture}%`}</p>
               <p className="text-[10px] text-ink-soft">Upright head position</p>
             </div>
             <div className="rounded-xl border border-line bg-paper-raised p-3">
-              <span className="text-[11px] text-muted">Active Composure</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.composure}%</p>
-              <p className="text-[10px] text-ink-soft">Low physical freeze</p>
+              <span className="text-[11px] text-muted">Movement Continuity</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.composure == null ? "Not measured" : `${analysis.visualMetrics.composure}%`}</p>
+              <p className="text-[10px] text-ink-soft">Observed body movement</p>
             </div>
             <div className="rounded-xl border border-line bg-paper-raised p-3">
-              <span className="text-[11px] text-muted">Stress Index</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-amber-ink">{analysis.visualMetrics.stressScore}%</p>
-              <p className="text-[10px] text-ink-soft">Optical motion stability</p>
+              <span className="text-[11px] text-muted">Tension estimate</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-amber-ink">{analysis.visualMetrics.stressScore == null ? "Not measured" : `${analysis.visualMetrics.stressScore}%`}</p>
+              <p className="text-[10px] text-ink-soft">Requires calibrated model</p>
             </div>
           </div>
         </Card>
       )}
 
       {/* Diagnosis Panel */}
+      {analysis.transcript && <Card className="p-5">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Recorded transcript</p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">{analysis.transcript}</p>
+        <p className="mt-2 text-xs text-muted">{analysis.wpm == null ? "" : `${Math.round(analysis.wpm)} WPM`}{analysis.durationSeconds == null ? "" : ` · ${analysis.durationSeconds.toFixed(1)}s recorded`} · Detected language: {analysis.language}</p>
+      </Card>}
+      {analysis.answerFeedback && <Card className="p-5">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Answer review</p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-soft">{analysis.answerFeedback}</p>
+      </Card>}
       <DiagnosisPanel diagnosis={diagnosis} />
 
       {/* Targeted Challenge Recommendation */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg sm:text-xl text-ink">Recommended 30-Second PEEL Drill</h2>
+          <h2 className="font-display text-lg sm:text-xl text-ink">Recommended Practice Drill</h2>
           <Button size="sm" onClick={onStartChallenge} className="shrink-0">
-            Start PEEL Drill
+            Start Practice Drill
             <ArrowRight size={14} />
           </Button>
         </div>

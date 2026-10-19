@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
+import type { LearnerProfile, RecentSessionSummary } from "@/lib/types";
 import { Network } from "lucide-react";
 
 interface Node {
@@ -12,24 +13,6 @@ interface Node {
   tone: "ink" | "lavender" | "amber" | "rose" | "teal";
 }
 
-const nodes: Node[] = [
-  { id: "student", label: "Aravind", x: 60, y: 100, tone: "ink" },
-  { id: "topic", label: "DBMS", x: 220, y: 40, tone: "lavender" },
-  { id: "weakness", label: "Structure", x: 220, y: 100, tone: "rose" },
-  { id: "condition", label: "Time pressure", x: 220, y: 160, tone: "amber" },
-  { id: "language", label: "English", x: 400, y: 60, tone: "lavender" },
-  { id: "recovery", label: "Interruption", x: 400, y: 140, tone: "teal" },
-];
-
-const edges: [string, string][] = [
-  ["student", "topic"],
-  ["student", "weakness"],
-  ["student", "condition"],
-  ["weakness", "condition"],
-  ["weakness", "language"],
-  ["condition", "recovery"],
-];
-
 const toneFill: Record<Node["tone"], string> = {
   ink: "var(--teal)",
   lavender: "var(--lavender-ink)",
@@ -38,12 +21,13 @@ const toneFill: Record<Node["tone"], string> = {
   teal: "var(--teal-ink)",
 };
 
-function point(id: string) {
-  const n = nodes.find((n) => n.id === id)!;
-  return n;
-}
-
-export function CommunicationGraph() {
+export function CommunicationGraph({ profile, sessions }: { profile: LearnerProfile; sessions: RecentSessionSummary[] }) {
+  const labels = [...profile.strengths, ...profile.weaknesses].slice(0, 5);
+  const nodes: Node[] = [ { id: "student", label: profile.name, x: 60, y: 100, tone: "ink" },
+    ...labels.map((item, i) => ({ id: item.id, label: item.label, x: i<3 ? 220 : 400,
+      y: 40+(i%3)*60, tone: "lavender" as const })) ];
+  const edges: [string,string][] = labels.map((item) => ["student",item.id]);
+  const point = (id: string) => nodes.find((n) => n.id === id)!;
   return (
     <Card className="p-6">
       <div className="mb-1 flex items-center gap-2">
@@ -51,10 +35,10 @@ export function CommunicationGraph() {
         <h2 className="font-display text-lg text-ink">Communication graph</h2>
       </div>
       <p className="mb-5 text-[13px] text-ink-soft">
-        Relationships Pitchground has learned (e.g. &ldquo;English + time pressure → structure deterioration&rdquo;)
-        become persistent knowledge, not a one-time score.
+        Your measured communication dimensions from your recorded practice.
       </p>
 
+      {labels.length === 0 && <p className="rounded-xl border border-line bg-paper p-4 text-sm text-muted">Complete a recorded session to build your communication graph.</p>}
       <div className="overflow-x-auto">
         <svg viewBox="0 0 460 200" className="h-52 w-full min-w-[420px]" aria-hidden="true">
           {edges.map(([a, b], i) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,10 +12,9 @@ import { Select } from "@/components/ui/Select";
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
 import { DebateReportPanel } from "@/components/debate/DebateReportPanel";
 import { RecordingPanel } from "@/components/interview/RecordingPanel";
-import { DEBATE_TOPICS, getDebateScript } from "@/mock/debate";
-import { languages, difficulties } from "@/mock/scenarios";
+import { analyzeRecording, getPracticeReport, languageCode } from "@/services/practiceService";
+import { languages, difficulties } from "@/lib/practiceOptions";
 import {
-  analyzeDebate,
   DEBATE_ANALYSIS_STAGES,
   generateAiOpponentTurn,
 } from "@/services/debateService";
@@ -25,10 +24,12 @@ import {
   createAttempt,
   uploadAttemptMedia,
   completeAttempt,
+  getAttempt,
   waitForAttemptComplete,
 } from "@/services/sessionService";
 import { transcribeAudioBlob } from "@/services/sttService";
 import { cn } from "@/lib/utils";
+import { speakOpponent } from "@/lib/opponentSpeech";
 
 import type {
   DebateAnalysis,
@@ -124,7 +125,7 @@ export default function DebateArenaPage() {
   const router = useRouter();
 
   // Setup state
-  const [selectedTopic, setSelectedTopic] = useState<DebateTopic>(DEBATE_TOPICS[0]);
+  const [selectedTopic, setSelectedTopic] = useState<DebateTopic>({ id: "custom", title: "", category: "Education", context: "", forPerspective: "", againstPerspective: "" });
   const [selectedPosition, setSelectedPosition] = useState<DebatePosition>("For");
   const [selectedLanguage, setSelectedLanguage] = useState<Language>("English");
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>("Standard");
@@ -137,7 +138,13 @@ export default function DebateArenaPage() {
   const [userSpeechPhase, setUserSpeechPhase] = useState<"ready" | "speaking" | "finished">("ready");
   const [userTypedTranscript, setUserTypedTranscript] = useState("");
   const [aiTypedTranscript, setAiTypedTranscript] = useState("");
+  const [opponentLanguage, setOpponentLanguage] = useState("English");
+  const spokenLanguageRef = useRef<string | undefined>(undefined);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [voicePending, setVoicePending] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const opponentSpeech = useRef<{cancel:()=>void}|null>(null);
   const [secondsLeft, setSecondsLeft] = useState(60);
 
   // Completed turns transcripts storage
@@ -148,21 +155,30 @@ export default function DebateArenaPage() {
     aiCounter2?: string;
     userClosing?: string;
   }>({});
-  const userOpeningVisualRef = useRef<any>(null);
-  const userRebuttalVisualRef = useRef<any>(null);
 
   // Camera & Media stream
   const mobileVideoRef = useRef<HTMLVideoElement>(null);
   const desktopVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scoredAttempts = useRef(new Set<string>());
+  const attachMobileVideo = useCallback((node: HTMLVideoElement | null) => {
+    mobileVideoRef.current = node;
+    if (node && streamRef.current) { node.srcObject = streamRef.current; void node.play().catch(() => {}); }
+  }, []);
+  const attachDesktopVideo = useCallback((node: HTMLVideoElement | null) => {
+    desktopVideoRef.current = node;
+    if (node && streamRef.current) { node.srcObject = streamRef.current; void node.play().catch(() => {}); }
+  }, []);
   const mobileUserTranscriptRef = useRef<HTMLParagraphElement>(null);
   const mobileAiTranscriptRef = useRef<HTMLParagraphElement>(null);
   const desktopUserTranscriptRef = useRef<HTMLDivElement>(null);
   const desktopAiTranscriptRef = useRef<HTMLDivElement>(null);
-  const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
+  const [cameraState, setCameraState] = useState<"pending" | "live" | "audio-only" | "unavailable">("pending");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [opponentAttempt,setOpponentAttempt]=useState(0);
+  const lastTake=useRef<{blob:Blob;prompt:string;role:string;language:string}|null>(null);
 
   // Evaluation results
   const [analysisResult, setAnalysisResult] = useState<DebateAnalysis | null>(null);
@@ -177,7 +193,8 @@ export default function DebateArenaPage() {
   };
 
   const opponentPosition: DebatePosition = selectedPosition === "For" ? "Against" : "For";
-  const script = getDebateScript(selectedTopic.id, selectedLanguage);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [pendingChallenge, setPendingChallenge] = useState<import("@/components/interview/RecordingPanel").RecordingSubmitPayload | null>(null);
   const activeTurnInfo = TURN_CONFIG[currentTurn];
   const isUserTurn = activeTurnInfo.speaker === "user";
   const isAiTurn = activeTurnInfo.speaker === "ai";
@@ -208,7 +225,12 @@ export default function DebateArenaPage() {
     let cancelled = false;
     const startCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        }
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -220,7 +242,7 @@ export default function DebateArenaPage() {
         if (desktopVideoRef.current) {
           desktopVideoRef.current.srcObject = stream;
         }
-        setCameraState("live");
+        setCameraState(stream.getVideoTracks().length ? "live" : "audio-only");
       } catch {
         if (!cancelled) setCameraState("unavailable");
       }
@@ -263,12 +285,33 @@ export default function DebateArenaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageMode, isUserTurn, userSpeechPhase, secondsLeft]);
 
-  // Trigger AI Turn speech & typewriter when control shifts to AI
+  function playOpponentVoice(text=aiTypedTranscript, language=opponentLanguage) {
+    opponentSpeech.current?.cancel();
+    setVoiceError(null);
+    setIsAiSpeaking(false);
+    setVoicePending(true);
+    opponentSpeech.current=speakOpponent(text,language,{
+      onStart:()=>{setVoicePending(false);setIsAiSpeaking(true);},
+      onEnd:()=>{setVoicePending(false);setIsAiSpeaking(false);},
+      onError:(message)=>{setVoicePending(false);setIsAiSpeaking(false);setVoiceError(message);},
+    });
+  }
+
+  function stopOpponentVoice() {
+    opponentSpeech.current?.cancel();
+    setVoicePending(false);
+    setIsAiSpeaking(false);
+  }
+
+  // Generate actual Groq text; speaking state follows the speech engine events.
   useEffect(() => {
     if (pageMode !== "arena" || !isAiTurn) return;
 
     let cancelled = false;
-    setIsAiSpeaking(true);
+    setIsAiSpeaking(false);
+    setIsAiGenerating(true);
+    setVoicePending(false);
+    setVoiceError(null);
     setAiTypedTranscript("Formulating dynamic counter-argument...");
 
     const turnNum = currentTurn === "ai-counter-1" ? 1 : 2;
@@ -276,44 +319,30 @@ export default function DebateArenaPage() {
       ? (debateHistory.userOpening || userTypedTranscript)
       : (debateHistory.userRebuttal || userTypedTranscript);
 
-    generateAiOpponentTurn(selectedTopic.id, config, turnNum, userSpeech)
-      .then(({ counterArgumentText }) => {
+    const history: {speaker:"user"|"opponent";text:string}[] = turnNum===2
+      ? [{speaker:"user",text:debateHistory.userOpening||""},{speaker:"opponent",text:debateHistory.aiCounter1||""}].filter(entry=>entry.text.trim()) as {speaker:"user"|"opponent";text:string}[] : [];
+    generateAiOpponentTurn(selectedTopic.id, config, turnNum, userSpeech, history, spokenLanguageRef.current)
+      .then(({ counterArgumentText, language }) => {
         if (cancelled) return;
-        const targetAiText = counterArgumentText || (currentTurn === "ai-counter-1" ? script.aiCounter : script.aiCounter2);
-        let i = 0;
-        setAiTypedTranscript("");
-        const interval = setInterval(() => {
-          if (cancelled) {
-            clearInterval(interval);
-            return;
-          }
-          i += 3;
-          setAiTypedTranscript(targetAiText.slice(0, i));
-          if (i >= targetAiText.length) {
-            clearInterval(interval);
-            setIsAiSpeaking(false);
-          }
-        }, 18);
+        setAiTypedTranscript(counterArgumentText);
+        setOpponentLanguage(language);
+        setIsAiGenerating(false);
+        playOpponentVoice(counterArgumentText, language);
       })
       .catch((err) => {
         if (cancelled) return;
-        console.warn("AI counter generation error, falling back to script:", err);
-        const targetAiText = currentTurn === "ai-counter-1" ? script.aiCounter : script.aiCounter2;
-        setAiTypedTranscript(targetAiText);
+        setFlowError(err instanceof Error ? err.message : "Opponent generation failed. Please retry.");
+        setAiTypedTranscript("");
         setIsAiSpeaking(false);
+        setIsAiGenerating(false);
       });
 
     return () => {
       cancelled = true;
+      opponentSpeech.current?.cancel();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageMode, currentTurn]);
-
-  function randomizeTopic() {
-    const remaining = DEBATE_TOPICS.filter((t) => t.id !== selectedTopic.id);
-    const random = remaining[Math.floor(Math.random() * remaining.length)] ?? DEBATE_TOPICS[0];
-    setSelectedTopic(random);
-  }
+  }, [pageMode, currentTurn, opponentAttempt]);
 
   function randomizePosition() {
     setSelectedPosition(Math.random() > 0.5 ? "For" : "Against");
@@ -322,15 +351,16 @@ export default function DebateArenaPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   async function enterArena() {
-    setPageMode("arena");
+    setFlowError(null);
+    if (!selectedTopic.title.trim()) { setFlowError("Enter a debate topic or domain."); return; }
     setCurrentTurn("user-opening");
     setUserSpeechPhase("ready");
     setSecondsLeft(60);
     setUserTypedTranscript("");
     setAiTypedTranscript("");
     setDebateHistory({});
-    userOpeningVisualRef.current = null;
-    userRebuttalVisualRef.current = null;
+    spokenLanguageRef.current = undefined;
+    scoredAttempts.current.clear();
     try {
       const sess = await createSession({
         mode: "debate",
@@ -340,15 +370,22 @@ export default function DebateArenaPage() {
         difficulty: selectedDifficulty,
       });
       setSessionId(sess.id);
+      setSelectedTopic((t) => ({ ...t, title: sess.current_action.question_spec.prompt_text }));
+      setPageMode("arena");
     } catch (e) {
-      console.warn("Could not create debate backend session:", e);
+      setFlowError(e instanceof Error ? e.message : "Could not start debate.");
     }
   }
 
   function startUserSpeaking() {
+    stopOpponentVoice();
+    if (!streamRef.current?.getAudioTracks().some((t) => t.readyState === "live")) {
+      setFlowError("Allow microphone access before recording."); return;
+    }
+    setFlowError(null);
     setUserSpeechPhase("speaking");
     setSecondsLeft(activeTurnInfo.timeLimitSeconds);
-    setUserTypedTranscript("Listening... Speak your argument.");
+    setUserTypedTranscript("");
 
     if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
       try {
@@ -357,64 +394,56 @@ export default function DebateArenaPage() {
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) audioChunksRef.current.push(e.data);
         };
+        recorder.onerror = () => {
+          setFlowError("Recording was interrupted. Please record your argument again.");
+          setUserSpeechPhase("ready"); setIsTranscribing(false);
+        };
         recorder.onstop = async () => {
-          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-          if (blob.size > 200) {
-            setIsTranscribing(true);
-            setUserTypedTranscript("Transcribing audio and running computer vision analysis...");
-
-            // 1. Send to backend attempt for real OpenCV visual extraction & audio analysis
-            if (sessionId) {
-              try {
-                const turnRole = currentTurn === "user-opening" ? "opening" : currentTurn === "user-rebuttal" ? "rebuttal" : "closing";
-                const attempt = await createAttempt(sessionId, turnRole);
-                await uploadAttemptMedia(sessionId, attempt.id, blob, blob);
-                await completeAttempt(sessionId, attempt.id);
-                const completed = await waitForAttemptComplete(sessionId, attempt.id, 25000);
-                if (completed?.metrics?.visual) {
-                  if (currentTurn === "user-opening") {
-                    userOpeningVisualRef.current = completed.metrics.visual;
-                  } else if (currentTurn === "user-rebuttal") {
-                    userRebuttalVisualRef.current = completed.metrics.visual;
-                  }
-                }
-              } catch (mediaErr) {
-                console.warn("Backend debate attempt media error:", mediaErr);
-              }
-            }
-
-            // 2. Real Faster-Whisper transcription
-            try {
-              const langCode = selectedLanguage === "Malayalam" ? "ml" : selectedLanguage === "Hindi" ? "hi" : "auto";
-              const result = await transcribeAudioBlob(blob, langCode);
-              if (result.text && result.text.trim()) {
-                setUserTypedTranscript(result.text.trim());
-              } else {
-                setUserTypedTranscript("Speech recorded (low vocal amplitude detected).");
-              }
-            } catch (err) {
-              console.warn("Debate STT error:", err);
-              const targetFullText =
-                currentTurn === "user-opening"
-                  ? script.userOpening
-                  : currentTurn === "user-rebuttal"
-                    ? script.userRebuttal
-                    : script.userClosing;
-              setUserTypedTranscript(targetFullText);
-            } finally {
-              setIsTranscribing(false);
-            }
-          }
+          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "video/webm" });
+          setIsTranscribing(true);
+          try {
+            if (!sessionId) throw new Error("Start a session before recording.");
+            const role = currentTurn === "user-opening" ? "opening" : currentTurn === "user-rebuttal" ? "rebuttal" : "closing";
+            const prompt = currentTurn === "user-opening" ? selectedTopic.title : `${selectedTopic.title}. Respond to: ${debateHistory.aiCounter2 || debateHistory.aiCounter1 || ""}`;
+            lastTake.current={blob,prompt,role,language:languageCode(selectedLanguage)};
+            const completed = await analyzeRecording(sessionId, role, { audioBlob: blob,
+              videoBlob: blob.type.startsWith("video/") ? blob : null }, languageCode(selectedLanguage), prompt, undefined, true);
+            scoredAttempts.current.add(completed.id);
+            if (!completed.transcript?.text?.trim()) throw new Error("No usable speech detected. Record again.");
+            setUserTypedTranscript(completed.transcript.text);
+            spokenLanguageRef.current = completed.transcript.language;
+          } catch (err) {
+            setUserTypedTranscript("");
+            setUserSpeechPhase("ready");
+            setFlowError(err instanceof Error ? err.message : "Analysis failed. Record again.");
+          } finally { setIsTranscribing(false); }
         };
         mediaRecorderRef.current = recorder;
         recorder.start(250);
       } catch (err) {
-        console.warn("MediaRecorder start error:", err);
+        setUserSpeechPhase("ready");
+        setFlowError(err instanceof Error ? err.message : "Recording failed. Please retry.");
       }
     }
   }
 
+  async function retryLastAnalysis() {
+    if (!sessionId || !lastTake.current) return;
+    const take=lastTake.current;
+    setFlowError(null);setIsTranscribing(true);
+    try {
+      const result=await analyzeRecording(sessionId,take.role,{audioBlob:take.blob,videoBlob:take.blob.type.startsWith("video/")?take.blob:null},take.language,take.prompt,undefined,true);
+      scoredAttempts.current.add(result.id);
+      spokenLanguageRef.current = result.transcript.language;
+      setUserTypedTranscript(result.transcript.text);setUserSpeechPhase("finished");
+    } catch (err) {setFlowError(err instanceof Error?err.message:"Analysis unavailable. Retry this recording.");}
+    finally {setIsTranscribing(false);}
+  }
+
   function finishUserSpeech() {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== "recording") return;
+    setIsTranscribing(true);
+    setUserTypedTranscript("");
     setUserSpeechPhase("finished");
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
@@ -422,6 +451,12 @@ export default function DebateArenaPage() {
   }
 
   function submitUserTurn() {
+    if (userSpeechPhase !== "finished" || isTranscribing || !userTypedTranscript.trim()) return;
+    if (currentTurn==="user-opening" || currentTurn==="user-rebuttal") {
+      setAiTypedTranscript("");
+      setIsAiGenerating(true);
+      setVoiceError(null);
+    }
     if (currentTurn === "user-opening") {
       setDebateHistory((prev) => ({ ...prev, userOpening: userTypedTranscript }));
       // Pass turn control to RIGHT (AI)
@@ -439,15 +474,17 @@ export default function DebateArenaPage() {
   }
 
   function advanceFromAiTurn() {
+    if (isAiGenerating || voicePending || !aiTypedTranscript.trim()) return;
+    stopOpponentVoice();
     if (currentTurn === "ai-counter-1") {
-      setDebateHistory((prev) => ({ ...prev, aiCounter1: aiTypedTranscript || script.aiCounter }));
+      setDebateHistory((prev) => ({ ...prev, aiCounter1: aiTypedTranscript }));
       // Pass turn control to LEFT (User)
       setCurrentTurn("user-rebuttal");
       setUserSpeechPhase("ready");
       setSecondsLeft(30);
       setUserTypedTranscript("");
     } else if (currentTurn === "ai-counter-2") {
-      setDebateHistory((prev) => ({ ...prev, aiCounter2: aiTypedTranscript || script.aiCounter2 }));
+      setDebateHistory((prev) => ({ ...prev, aiCounter2: aiTypedTranscript }));
       // Pass turn control to LEFT (User)
       setCurrentTurn("user-closing");
       setUserSpeechPhase("ready");
@@ -461,54 +498,38 @@ export default function DebateArenaPage() {
   }
 
   async function onAnalysisDone() {
-    const userRounds: DebateRoundData[] = [
-      {
-        round: 1,
-        userTranscript: debateHistory.userOpening || script.userOpening,
-        timeLimitSeconds: 60,
-        visualMetrics: userOpeningVisualRef.current || undefined,
-      },
-      {
-        round: 2,
-        userTranscript: debateHistory.userRebuttal || script.userRebuttal,
-        aiCounterTranscript: debateHistory.aiCounter1 || script.aiCounter,
-        timeLimitSeconds: 30,
-        visualMetrics: userRebuttalVisualRef.current || undefined,
-      },
-    ];
-    const res = await analyzeDebate(config, userRounds);
-    setAnalysisResult(res.analysis);
-    setDiagnosisResult(res.diagnosis);
-    setChallengeResult(res.challenge);
-
-    const delta = res.analysis.openingScore - res.analysis.rebuttalScore;
-
-    await saveGenericSession({
-      sessionId: sessionId || undefined,
-      topic: `Debate: ${config.topic.title}`,
-      mode: "debate",
-      audience: selectedPosition,
-      language: selectedLanguage,
-      difficulty: selectedDifficulty,
-      overallScore: res.analysis.overallScore,
-      scoreDelta: Math.abs(delta),
-      primaryWeakness: delta > 10 ? "Rebuttal under counter-pressure" : "Premise refutation precision",
-      diagnosis: res.diagnosis,
-      transcript: [debateHistory.userOpening || script.userOpening, debateHistory.userRebuttal || script.userRebuttal, debateHistory.userClosing || script.userClosing].filter(Boolean).join(" "),
-      metrics: res.analysis,
-    });
-
-    setPageMode("report");
+    if (!sessionId) return;
+    try {
+      await Promise.all([...scoredAttempts.current].map(async id => {
+        const attempt = await getAttempt(sessionId, id);
+        if (attempt.analysis_status === "failed") await completeAttempt(sessionId, id);
+        await waitForAttemptComplete(sessionId, id);
+      }));
+      if (pendingChallenge) {
+        await analyzeRecording(sessionId, "retry", pendingChallenge, languageCode(selectedLanguage), challengeResult?.prompt);
+        setPendingChallenge(null);
+      }
+      const res = await getPracticeReport<DebateAnalysis>(sessionId);
+      setAnalysisResult(res.analysis); setDiagnosisResult(res.diagnosis); setChallengeResult(res.challenge);
+      await saveGenericSession({ sessionId, topic: selectedTopic.title, mode: "debate",
+        overallScore: res.analysis.overallScore, scoreDelta: 0, primaryWeakness: res.diagnosis.headline });
+      setPageMode("report");
+    } catch (err) {
+      setFlowError(err instanceof Error ? err.message : "Report generation failed.");
+      setPageMode("arena");
+    }
   }
 
+  const challengeQuestion: RoundQuestion = { id: "debate-challenge",
+    prompt: challengeResult?.prompt || selectedTopic.title, round: "replay", pressure: "time-limit",
+    timeLimitSeconds: challengeResult?.timeLimitSeconds || 30 };
 
-  const challengeQuestion: RoundQuestion = {
-    id: `debate-chal-q`,
-    prompt: `Practice PRT Rebuttal (30s limit): Point → Refutation → Turnaround.`,
-    round: "replay",
-    pressure: "time-limit",
-    timeLimitSeconds: 30,
-  };
+  const voiceControls = isAiTurn && !isAiGenerating && aiTypedTranscript.trim() ? <div className="mt-3">
+    <Button size="sm" variant="outline" onClick={()=>isAiSpeaking || voicePending ? stopOpponentVoice() : playOpponentVoice()}>
+      <Volume2 size={14}/>{isAiSpeaking ? "Stop voice" : voicePending ? "Cancel voice" : "Play voice"}
+    </Button>
+    {voiceError && <p role="alert" className="mt-2 text-xs text-amber-ink">{voiceError}</p>}
+  </div> : null;
 
   return (
     <div className="mx-auto mt-4 w-full max-w-6xl px-3 pb-24 sm:mt-6 sm:px-6">
@@ -535,6 +556,8 @@ export default function DebateArenaPage() {
         )}
       </div> */}
 
+      {flowError && <p role="alert" className="mb-4 rounded-xl border border-rose/40 bg-paper-raised p-4 text-sm text-rose-ink">{flowError}{isAiTurn && <button className="ml-3 font-semibold underline" onClick={()=>{setFlowError(null);setOpponentAttempt(i=>i+1);}}>Retry opponent</button>}{isUserTurn && lastTake.current && <button disabled={isTranscribing} className="ml-3 font-semibold underline" onClick={retryLastAnalysis}>Retry analysis</button>}</p>}
+      {isTranscribing && <p role="status" className="mb-4 text-sm text-muted">Transcribing your recording. Your argument will appear here when ready; scoring continues in the background.</p>}
       <AnimatePresence mode="wait">
         {/* 1. SETUP SCREEN */}
         {pageMode === "setup" && (
@@ -564,31 +587,8 @@ export default function DebateArenaPage() {
             <div className="mb-6">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Select Debate Topic</h2>
-                <Button size="sm" variant="ghost" onClick={randomizeTopic} className="h-7 text-xs">
-                  <Dices size={13} />
-                  Random topic
-                </Button>
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {DEBATE_TOPICS.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setSelectedTopic(t)}
-                    className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all ${selectedTopic.id === t.id
-                      ? "border-lavender-strong bg-lavender/30 shadow-soft"
-                      : "border-line bg-paper-raised hover:border-line-strong"
-                      }`}
-                  >
-                    <Badge variant={selectedTopic.id === t.id ? "lavender" : "outline"} size="sm" className="mb-2">
-                      {t.category}
-                    </Badge>
-                    <p className="font-display text-base font-semibold text-ink">{t.title}</p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-soft">{t.context}</p>
-                  </button>
-                ))}
-              </div>
+              <input aria-label="Debate topic" value={selectedTopic.title} onChange={(e) => setSelectedTopic((t) => ({ ...t, title: e.target.value }))} placeholder="Enter any proposition, topic or domain" className="w-full rounded-xl border border-line bg-paper-raised px-4 py-3 text-sm text-ink outline-none focus:border-lavender-ink" />
             </div>
 
             {/* Position Selector */}
@@ -784,7 +784,7 @@ export default function DebateArenaPage() {
                 {/* User Camera */}
                 <div className="relative aspect-[4/3] w-full bg-gradient-to-br from-teal to-[#091b18]">
                   <video
-                    ref={mobileVideoRef}
+                    ref={attachMobileVideo}
                     autoPlay
                     muted
                     playsInline
@@ -799,7 +799,7 @@ export default function DebateArenaPage() {
                         <CameraOff size={20} />
                       </div>
                       <p className="text-xs text-white/60">
-                        {cameraState === "pending" ? "Connecting camera…" : "Demo Camera Mode"}
+                        {cameraState === "pending" ? "Connecting camera…" : cameraState === "audio-only" ? "Audio-only practice" : "Camera unavailable"}
                       </p>
                     </div>
                   )}
@@ -902,6 +902,7 @@ export default function DebateArenaPage() {
                       </span>
                     )}
                   </p>
+                  {voiceControls}
                 </div>
               </div>
 
@@ -932,7 +933,7 @@ export default function DebateArenaPage() {
                     {userSpeechPhase === "finished" && (
                       <Button
                         size="lg"
-                        onClick={submitUserTurn}
+                        disabled={isTranscribing || !userTypedTranscript.trim()} onClick={submitUserTurn}
                         className="w-full justify-center bg-teal text-white hover:bg-teal/90"
                       >
                         Submit Turn
@@ -944,10 +945,10 @@ export default function DebateArenaPage() {
                 {isAiTurn && (
                   <Button
                     size="lg"
-                    onClick={advanceFromAiTurn}
+                    disabled={isAiGenerating || voicePending || !aiTypedTranscript.trim()} onClick={advanceFromAiTurn}
                     className="w-full justify-center bg-ink text-white hover:bg-ink/90"
                   >
-                    {isAiSpeaking ? "Skip & Rebut Now" : "Deliver Your Rebuttal"}
+                    {isAiGenerating ? "Preparing opponent…" : isAiSpeaking ? "Stop voice & rebut" : "Deliver Your Rebuttal"}
                     <ArrowRight size={16} />
                   </Button>
                 )}
@@ -997,7 +998,7 @@ export default function DebateArenaPage() {
 
                   <div className="relative h-[230px] w-full overflow-hidden bg-teal">
                     <video
-                      ref={desktopVideoRef}
+                      ref={attachDesktopVideo}
                       autoPlay
                       muted
                       playsInline
@@ -1013,7 +1014,7 @@ export default function DebateArenaPage() {
                           <CameraOff size={18} />
                         </div>
                         <p className="text-xs text-white/70">
-                          {cameraState === "pending" ? "Connecting video…" : "Demo Video Preview Mode"}
+                          {cameraState === "pending" ? "Connecting video…" : "Camera unavailable"}
                         </p>
                       </div>
                     )}
@@ -1026,7 +1027,7 @@ export default function DebateArenaPage() {
                       )}
                       <span className="flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white/80 backdrop-blur-sm">
                         <Camera size={9} />
-                        {cameraState === "live" ? "Cam Live" : "Demo Cam"}
+                        {cameraState === "live" ? "Cam Live" : "Camera off"}
                       </span>
                     </div>
                     {isUserTurn && userSpeechPhase === "speaking" && (
@@ -1092,7 +1093,7 @@ export default function DebateArenaPage() {
                           </Button>
                         )}
                         {userSpeechPhase === "finished" && (
-                          <Button size="sm" onClick={submitUserTurn} className="bg-teal hover:bg-teal/90 text-white">
+                          <Button size="sm" disabled={isTranscribing || !userTypedTranscript.trim()} onClick={submitUserTurn} className="bg-teal hover:bg-teal/90 text-white">
                             Submit Turn
                             <ArrowRight size={14} />
                           </Button>
@@ -1129,7 +1130,7 @@ export default function DebateArenaPage() {
                       </div>
                     </div>
                     <Badge variant={isAiTurn ? "lavender" : "outline"} size="sm">
-                      {isAiTurn ? (isAiSpeaking ? "Active · Countering" : "Finished Counter") : "Listening to You"}
+                      {isAiTurn ? (isAiGenerating ? "Preparing reply" : voicePending ? "Preparing voice" : isAiSpeaking ? "Speaking" : "Reply ready") : "Waiting for your argument"}
                     </Badge>
                   </div>
 
@@ -1161,9 +1162,9 @@ export default function DebateArenaPage() {
                       <p className="text-[11px] text-white/70">
                         {isAiTurn
                           ? isAiSpeaking
-                            ? "Synthesizing adversarial pushback…"
-                            : "Counterargument delivered"
-                          : "Evaluating your argument…"}
+                            ? "Speaking the generated counterargument…"
+                            : isAiGenerating ? "Preparing your opponent's reply…" : "Counterargument ready"
+                          : "Waiting for your argument…"}
                       </p>
                     </div>
                   </div>
@@ -1177,7 +1178,7 @@ export default function DebateArenaPage() {
                       {isAiTurn && (
                         <span className="flex items-center gap-1 text-[11px] text-ink-soft">
                           <Volume2 size={11} className="animate-pulse text-lavender-ink" />
-                          Live Voice
+                          {isAiSpeaking ? "Voice playing" : "Voice playback"}
                         </span>
                       )}
                     </div>
@@ -1197,10 +1198,11 @@ export default function DebateArenaPage() {
                         </span>
                       )}
                     </div>
+                    {voiceControls}
                     {isAiTurn && (
                       <div className="mt-3 flex items-center justify-end gap-2">
-                        <Button size="sm" onClick={advanceFromAiTurn} className="bg-ink hover:bg-ink/90 text-white">
-                          {isAiSpeaking ? "Skip & Rebut Now" : "Deliver Your Rebuttal"}
+                        <Button size="sm" disabled={isAiGenerating || voicePending || !aiTypedTranscript.trim()} onClick={advanceFromAiTurn} className="bg-ink hover:bg-ink/90 text-white">
+                          {isAiGenerating ? "Preparing opponent…" : isAiSpeaking ? "Stop voice & rebut" : "Deliver Your Rebuttal"}
                           <ArrowRight size={14} />
                         </Button>
                       </div>
@@ -1219,7 +1221,7 @@ export default function DebateArenaPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="ghost" onClick={finishAndAnalyze} className="text-xs text-muted hover:text-ink">
+                  <Button size="sm" variant="ghost" disabled={isTranscribing || userSpeechPhase === "speaking"} onClick={finishAndAnalyze} className="text-xs text-muted hover:text-ink">
                     End Debate & View Report
                   </Button>
                 </div>
@@ -1276,17 +1278,17 @@ export default function DebateArenaPage() {
                 Targeted Rebuttal Drill
               </Badge>
               <p className="font-display text-lg font-semibold text-ink">
-                Point → Refutation → Turnaround (PRT) Drill
+                {challengeResult?.objective}
               </p>
               <p className="mt-1 text-xs text-ink-soft">
-                Apply the 3-step refutation framework to reverse the counter-argument cleanly.
+                {challengeResult?.framework.join(" → ")}
               </p>
             </Card>
 
             <RecordingPanel
               question={challengeQuestion}
               language={selectedLanguage}
-              onSubmit={() => setPageMode("challenge-analyzing")}
+              onSubmit={(payload) => { setPendingChallenge(payload); setPageMode("challenge-analyzing"); }}
             />
           </motion.div>
         )}
@@ -1302,7 +1304,7 @@ export default function DebateArenaPage() {
           >
             <AnalyzingState
               stages={["Measuring rebuttal recovery...", "Updating learner profile..."]}
-              onDone={() => setPageMode("done")}
+              onDone={onAnalysisDone}
             />
           </motion.div>
         )}
@@ -1320,9 +1322,9 @@ export default function DebateArenaPage() {
               <Badge variant="teal" size="sm" className="mx-auto mb-4">
                 Drill Completed
               </Badge>
-              <h2 className="font-display text-3xl text-ink">Rebuttal Technique Improved!</h2>
+              <h2 className="font-display text-3xl text-ink">Practice recorded</h2>
               <p className="mx-auto mt-3 max-w-md text-[15px] text-ink-soft">
-                Your direct premise refutation score improved from 44% to 81% using the PRT framework.
+                Your recorded attempts are available in your session history.
               </p>
               <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
                 <Button size="lg" onClick={() => router.push("/dashboard")}>

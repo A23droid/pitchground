@@ -18,7 +18,7 @@ export function RecommendedNext({ profile }: { profile: LearnerProfile }) {
           <h3 className="font-display text-lg text-ink">Recommended next</h3>
           <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft break-words">{profile.recommendedNext.reason}</p>
         </div>
-        <Link href="/start?difficulty=Intense&topic=Database%20Systems" className="mt-5">
+        <Link href="/start" className="mt-5">
           <Button className="w-full">Practice this weakness</Button>
         </Link>
       </Card>
@@ -29,6 +29,7 @@ export function RecommendedNext({ profile }: { profile: LearnerProfile }) {
         </div>
         <h3 className="font-display text-lg text-ink">Pressure performance</h3>
         <ul className="mt-3 flex flex-col gap-3">
+          {!profile.pressurePatterns.length && <li className="text-sm text-muted">Comparable pressure measurements will appear here.</li>}
           {profile.pressurePatterns.map((p) => (
             <li key={p.type} className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
@@ -53,6 +54,7 @@ export function RecommendedNext({ profile }: { profile: LearnerProfile }) {
         </div>
         <h3 className="font-display text-lg text-ink">Language performance</h3>
         <ul className="mt-3 flex flex-col gap-3">
+          {!profile.languagePatterns.length && <li className="text-sm text-muted">Complete a language diagnostic to compare delivery.</li>}
           {profile.languagePatterns.map((l) => (
             <li key={l.language} className="flex min-w-0 items-center justify-between gap-3">
               <p className="min-w-0 truncate text-sm font-medium text-ink">{l.language}</p>

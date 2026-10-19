@@ -9,20 +9,23 @@ import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { RecommendedNext } from "@/components/dashboard/RecommendedNext";
 import { LanguageDiagnosticCard } from "@/components/profile/LanguageDiagnosticCard";
 import { CommunicationGraph } from "@/components/profile/CommunicationGraph";
-import { getLearnerProfile } from "@/services/learnerService";
-import type { LearnerProfile } from "@/lib/types";
+import { getLearnerProfile, getRecentSessions } from "@/services/learnerService";
+import type { LearnerProfile, RecentSessionSummary } from "@/lib/types";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<LearnerProfile | null>(null);
 
+  const [sessions, setSessions] = useState<RecentSessionSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    getLearnerProfile().then(setProfile);
+    Promise.all([getLearnerProfile(), getRecentSessions()]).then(([p,s]) => { setProfile(p); setSessions(s); })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not load profile."));
   }, []);
 
   return (
     <>
       <div className="mx-auto mt-8 flex w-full max-w-6xl flex-col gap-6 px-4 sm:px-6">
-        {!profile ? (
+        {error ? <div role="alert" className="rounded-2xl border border-line bg-paper-raised p-6 text-sm text-ink-soft">{error}<button onClick={() => window.location.reload()} className="ml-3 text-lavender-ink">Retry</button></div> : !profile ? (
           <div className="h-40 animate-pulse-soft rounded-2xl border border-line bg-paper-raised" />
         ) : (
           <motion.div
@@ -37,7 +40,7 @@ export default function ProfilePage() {
 
             {/* 3 Training Modes Breakdown (Interview, Debate, Impromptu) */}
             <FadeIn>
-              <ModeUsageCard />
+              <ModeUsageCard sessions={sessions} />
             </FadeIn>
 
             <FadeIn>
@@ -48,14 +51,14 @@ export default function ProfilePage() {
                 <ProgressChart data={profile.progress} />
               </FadeIn>
               <FadeIn>
-                <LanguageDiagnosticCard />
+                <LanguageDiagnosticCard comparison={profile.languageComparison} />
               </FadeIn>
             </div>
             <FadeIn>
               <StrengthsWeaknesses strengths={profile.strengths} weaknesses={profile.weaknesses} />
             </FadeIn>
             <FadeIn>
-              <CommunicationGraph />
+              <CommunicationGraph profile={profile} sessions={sessions} />
             </FadeIn>
           </motion.div>
         )}

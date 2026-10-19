@@ -24,3 +24,6 @@ soundfile>=0.12.1
 opencv-python>=4.8.0
 numpy>=1.26.0
 av>=12.0.0,<14.0.0        # faster-whisper needs av<14 (metadata_errors API)
+transformers>=4.44.2,<5
+torch>=2.2,<2.15
+safetensors>=0.4

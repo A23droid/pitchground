@@ -53,12 +53,12 @@ export function RecentSessions({ sessions }: { sessions: RecentSessionSummary[] 
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {s.scoreDelta !== 0 && (
-                <Badge variant={s.scoreDelta > 0 ? "teal" : "amber"} size="sm" className="font-mono">
+                <Badge variant={(s.scoreDelta ?? 0) > 0 ? "teal" : "amber"} size="sm" className="font-mono">
                   <TrendingUp size={11} />
-                  {formatSigned(s.scoreDelta)}
+                  {s.scoreDelta === null ? "—" : formatSigned(s.scoreDelta)}
                 </Badge>
               )}
-              <span className="w-10 text-right font-mono text-sm font-semibold text-ink">{s.overallScore}</span>
+              <span className="w-10 text-right font-mono text-sm font-semibold text-ink">{s.overallScore ?? "—"}</span>
             </div>
           </motion.div>
         ))}

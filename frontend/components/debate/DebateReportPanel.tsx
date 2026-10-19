@@ -77,7 +77,7 @@ export function DebateReportPanel({
               <span className="font-display text-xl font-bold text-teal-ink">{analysis.openingScore}%</span>
             </div>
             <p className="mt-1 text-xs text-ink-soft">
-              Structured premise with clear rationale and confident delivery.
+              Measured from your opening recording.
             </p>
           </div>
 
@@ -90,7 +90,7 @@ export function DebateReportPanel({
               <span className="font-display text-xl font-bold text-amber-ink">{analysis.rebuttalScore}%</span>
             </div>
             <p className="mt-1 text-xs text-ink-soft">
-              Direct premise refutation degraded by {analysis.openingScore - analysis.rebuttalScore} points under counter-pressure.
+              Overall score changed by {analysis.rebuttalScore - analysis.openingScore} points from your opening to your latest response.
             </p>
           </div>
         </div>
@@ -111,19 +111,17 @@ export function DebateReportPanel({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <MetricCard label="Argumentation" score={analysis.argumentation} desc="Thesis backing & clarity" />
         <MetricCard label="Rebuttal Precision" score={analysis.rebuttal} desc="Addressing opponent premise" alert />
-        <MetricCard label="Pressure Composure" score={analysis.pressureHandling} desc="Hesitation & pause latency" alert />
-        <MetricCard label="Communication Tone" score={analysis.communication} desc="Conviction & articulation" />
-        <MetricCard label={`${config.language} Fluency`} score={analysis.languageFidelity} desc="Vocabulary depth & grammar" />
+        <MetricCard label="Composure estimate" score={analysis.pressureHandling} desc="Hesitation & pause latency" alert />
+        <MetricCard label="Communication Tone" score={analysis.communication} desc="Measured pacing and vocal fillers" />
+        <MetricCard label={`${config.language} Fluency`} score={analysis.languageFidelity} desc="Estimated target-language word share" />
         <div className="rounded-2xl border border-line bg-paper-raised p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted">Code-Switching</span>
             <Languages size={14} className="text-muted" />
           </div>
-          <p className="mt-1 font-display text-2xl font-bold text-ink">{analysis.codeSwitchingRatio}%</p>
+          <p className="mt-1 font-display text-2xl font-bold text-ink">{analysis.codeSwitchingRatio == null ? "Not measured" : `${analysis.codeSwitchingRatio}%`}</p>
           <p className="mt-1 text-[11px] text-ink-soft">
-            {analysis.codeSwitchingRatio > 0
-              ? "Natural technical mixing detected; evaluated without English penalty."
-              : "Pure monolingual delivery."}
+            Script-based estimate from the recorded transcript.
           </p>
         </div>
       </div>
@@ -138,7 +136,7 @@ export function DebateReportPanel({
             </span>
             <Badge
               variant={
-                analysis.visualPresence.stressLevel <= 30
+                analysis.visualPresence.stressLevel == null || analysis.visualPresence.stressLevel <= 30
                   ? "teal"
                   : analysis.visualPresence.stressLevel <= 60
                   ? "amber"
@@ -146,33 +144,29 @@ export function DebateReportPanel({
               }
               size="sm"
             >
-              {analysis.visualPresence.stressLevel <= 30
-                ? "Low Physical Stress"
-                : analysis.visualPresence.stressLevel <= 60
-                ? "Moderate Tension"
-                : "High Physical Stress"} ({analysis.visualPresence.stressLevel}%)
+              Tension estimate ({analysis.visualPresence.stressLevel ?? "Not measured"})
             </Badge>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-xl border border-line bg-paper-raised p-3">
               <span className="text-[11px] text-muted">Eye Contact Stability</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.eyeContact}%</p>
-              <p className="text-[10px] text-ink-soft">Direct opponent address</p>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.eyeContact == null ? "Not measured" : `${analysis.visualPresence.eyeContact}%`}</p>
+              <p className="text-[10px] text-ink-soft">Camera orientation estimate</p>
             </div>
             <div className="rounded-xl border border-line bg-paper-raised p-3">
               <span className="text-[11px] text-muted">Posture & Head Up</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.posture}%</p>
-              <p className="text-[10px] text-ink-soft">Steadiness under attack</p>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.posture == null ? "Not measured" : `${analysis.visualPresence.posture}%`}</p>
+              <p className="text-[10px] text-ink-soft">Observed head orientation</p>
             </div>
             <div className="rounded-xl border border-line bg-paper-raised p-3">
-              <span className="text-[11px] text-muted">Active Composure</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.composure}%</p>
-              <p className="text-[10px] text-ink-soft">Low freeze ratio</p>
+              <span className="text-[11px] text-muted">Movement Continuity</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualPresence.composure == null ? "Not measured" : `${analysis.visualPresence.composure}%`}</p>
+              <p className="text-[10px] text-ink-soft">Observed body movement</p>
             </div>
             <div className="rounded-xl border border-line bg-paper-raised p-3">
-              <span className="text-[11px] text-muted">Stress Index</span>
-              <p className="mt-0.5 font-display text-xl font-bold text-amber-ink">{analysis.visualPresence.stressLevel}%</p>
-              <p className="text-[10px] text-ink-soft">Dynamic optical motion</p>
+              <span className="text-[11px] text-muted">Tension estimate</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-amber-ink">{analysis.visualPresence.stressLevel == null ? "Not measured" : `${analysis.visualPresence.stressLevel}%`}</p>
+              <p className="text-[10px] text-ink-soft">Requires calibrated model</p>
             </div>
           </div>
         </Card>
@@ -209,7 +203,7 @@ function MetricCard({
   alert = false,
 }: {
   label: string;
-  score: number;
+  score: number | null;
   desc: string;
   alert?: boolean;
 }) {
@@ -219,7 +213,7 @@ function MetricCard({
         <span className="text-xs font-medium text-muted">{label}</span>
         {alert && <ShieldAlert size={13} className="text-amber" />}
       </div>
-      <p className={`mt-1 font-display text-2xl font-bold ${alert ? "text-amber-ink" : "text-ink"}`}>{score}%</p>
+      <p className={`mt-1 font-display text-2xl font-bold ${alert ? "text-amber-ink" : "text-ink"}`}>{score === null ? "Not measured" : `${score}%`}</p>
       <p className="mt-1 text-[11px] text-ink-soft">{desc}</p>
     </div>
   );

@@ -8,8 +8,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
-import { saveAuth, saveToken } from "@/lib/auth";
-import { API_URL } from "@/lib/api";
+import { completeTokenLogin } from "@/lib/auth";
+import { authJson } from "@/lib/api";
 import { ArrowRight, ArrowLeft, Mail, Lock, User } from "lucide-react";
 
 export default function SignupPage() {
@@ -25,31 +25,14 @@ export default function SignupPage() {
     setSubmitting(true);
     setErrorMsg("");
     try {
-      const res = await fetch(`${API_URL}/auth/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name }),
+      const data = await authJson<{ access_token: string }>("/auth/signup", {
+        method: "POST", body: JSON.stringify({ email: email.trim(), password, name: name.trim() }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Failed to create account");
-      }
-      const data = await res.json();
-      saveToken(data.access_token);
-
-      const meRes = await fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${data.access_token}` },
-      });
-      if (meRes.ok) {
-        const meData = await meRes.json();
-        saveAuth({ name: meData.name || name || "New learner", email: meData.email, learnerId: meData.learner_id || meData.id });
-      } else {
-        saveAuth({ name: name || "New learner", email });
-      }
+      await completeTokenLogin(data.access_token);
 
       router.push("/start");
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Could not create account.");
       setSubmitting(false);
     }
   }
@@ -92,7 +75,7 @@ export default function SignupPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Aravind Kumar"
+                placeholder="Your name"
                 className="w-full bg-transparent text-sm text-ink placeholder:text-muted focus:outline-none"
               />
             </Field>

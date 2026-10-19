@@ -31,7 +31,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      {/* Extensions can inject body attributes before hydration (e.g. cz-shortcut-listen).
+          Limit suppression to this element so page content still reports mismatches. */}
+      <body className="antialiased" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

@@ -1,159 +1,71 @@
 import type { AttemptAnalysis, DiagnosisMetricDelta, FailureDiagnosis, TargetedChallenge } from "@/lib/types";
 
-/** Backend SignalBundle (0–1 fused) → UI AttemptAnalysis (0–100 nested). */
-export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): AttemptAnalysis {
-  const fused = bundle?.fused || {};
-  const acoustic = bundle?.acoustic || {};
-  const content = bundle?.content || {};
-  const visual = bundle?.visual;
-  const language = bundle?.language || {};
+type Data = Record<string, unknown>;
+const object = (value: unknown): Data => value && typeof value === "object" && !Array.isArray(value) ? value as Data : {};
+const number = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : null;
+const pct = (value: unknown): number | null => { const n=number(value); return n===null ? null : Math.round(n*100); };
+const text = (value: unknown): string | undefined => typeof value === "string" && value.trim() ? value : undefined;
+const inversePct = (value: unknown) => { const n=number(value); return n===null ? null : pct(1-n); };
 
-  const pct = (v: number | undefined, fallback = 0.0) => Math.round((v ?? fallback) * 100);
-
-  const structure = pct(fused.structure);
-  const fluency = pct(fused.fluency);
-  const composure = pct(fused.composure);
-  const presence = pct(fused.presence);
-  const contentScore = pct(content.coverage ?? fused.content);
-  const activeScores = [structure, fluency, composure, presence, contentScore].filter((s) => s > 0);
-  const overall = activeScores.length > 0
-    ? Math.round(activeScores.reduce((a, b) => a + b, 0) / activeScores.length)
-    : 0;
-
-  // Compute camera stress level (0-100) based on dynamic CV/Audio signals
-  const freezeRatio = visual?.freeze_ratio ?? 0.0;
-  const gazeAway = visual?.gaze_away ?? 0.0;
-  const energyVar = acoustic?.energy_var ?? 0.0;
-  const stressRaw = visual
-    ? (freezeRatio * 0.4 + gazeAway * 0.35 + Math.min(1.0, energyVar * 2) * 0.25) * 100
-    : Math.min(1.0, energyVar * 2) * 50;
-  const stressScore = visual?.stress_score !== undefined
-    ? Math.round(visual.stress_score * 100)
-    : Math.min(100, Math.max(0, Math.round(stressRaw)));
-
-  // Generate actionable improvement suggestions based on ML metrics
-  const improvements: string[] = [];
-  const wpm = acoustic.wpm ?? 0;
-  const fillerRate = acoustic.filler_rate ?? 0;
-  const pauseRatio = acoustic.pause_ratio ?? 0;
-
-  if (fillerRate > 6) {
-    improvements.push(`High conversational filler rate (${fillerRate.toFixed(1)}%). Practice substituting deliberate 1-second pauses instead of vocalizing 'um', 'uh', or 'basically'.`);
-  } else if (fillerRate > 3) {
-    improvements.push(`Moderate filler frequency detected (${fillerRate.toFixed(1)}%). Aim to speak in concise, single-idea sentences.`);
-  }
-
-  if (wpm > 165) {
-    improvements.push(`Speaking pace is fast (${Math.round(wpm)} WPM). Modulate your delivery closer to 130–150 WPM to project control.`);
-  } else if (wpm > 0 && wpm < 105) {
-    improvements.push(`Cadence is measured (${Math.round(wpm)} WPM). Slightly increase pacing to convey energy and enthusiasm.`);
-  }
-
-  if (pauseRatio > 0.28) {
-    improvements.push(`Elevated hesitation pauses (${Math.round(pauseRatio * 100)}% of time). Pre-structuring responses with the STAR or PREP framework reduces searching for words.`);
-  }
-
-  if (visual) {
-    if (gazeAway > 0.25) {
-      improvements.push("Camera gaze shifted frequently. Center your focus on the camera lens to project direct conviction.");
-    }
-    if ((visual.head_down ?? 0) > 0.25) {
-      improvements.push("Head tilt angle drifted downward. Keep your posture aligned with the frame.");
-    }
-    if ((visual.gesture_energy ?? 0.0) < 0.2 && (visual.gesture_energy ?? 0.0) > 0) {
-      improvements.push("Body posture was rigid. Natural, open hand gestures help emphasize key architectural trade-offs.");
-    }
-  }
-
-  if (content.coverage !== undefined && content.coverage < 0.6) {
-    improvements.push("Some core prompt key points were omitted. Be sure to explicitly name fundamental concepts and architectural implications.");
-  }
-
-  if (improvements.length === 0) {
-    improvements.push("Strong, well-structured delivery! Maintain this balanced cadence and posture in subsequent rounds.");
-  }
-
+/** Missing measurements remain null throughout the UI; no synthetic scores or advice. */
+export function signalBundleToAttemptAnalysis(value: unknown, attemptId: string): AttemptAnalysis {
+  const bundle=object(value), fused=object(bundle.fused), acoustic=object(bundle.acoustic);
+  const content=object(bundle.content), visual=object(bundle.visual), language=object(bundle.language), quality=object(bundle.quality);
+  const fluency=pct(fused.fluency), wpm=number(acoustic.wpm);
+  if (quality.audio_ok !== true || fluency===null || wpm===null) throw new Error("No valid recorded speech analysis is available.");
+  const scores=Object.values(fused).filter((v): v is number => number(v)!==null);
+  if (!scores.length) throw new Error("No measured dimensions are available.");
+  const transcript=object(bundle.transcript);
+  const primary=text(language.primary);
+  const fillerDetection=object(acoustic.filler_detection);
+  const fillersMeasured=fillerDetection.status==="complete";
+  const languageNames: Record<string,string>={en:"English",hi:"Hindi",ml:"Malayalam",mixed:"Mixed",unknown:"Unknown"};
   return {
     attemptId,
-    content: {
-      correctness: contentScore,
-      relevance: pct(content.specificity, 0.0),
-      topicUnderstanding: contentScore,
-    },
-    communication: {
-      structure,
-      clarity: fluency,
-      coherence: structure,
-      fluency,
-    },
-    voice: {
-      speakingRateWpm: Math.round(wpm),
-      fillerCount: Math.round(acoustic.filler_rate ?? 0),
-      fillerRatePercent: Number(fillerRate.toFixed(1)),
-      pauseCount: Math.round(pauseRatio * 10),
-      pauseRatioPercent: Math.round(pauseRatio * 100),
-      responseLatencySeconds: Number((pauseRatio * 2).toFixed(1)),
-    },
-    visual: {
-      gaze: visual ? Math.max(0, Math.min(100, pct(1 - (visual.gaze_away ?? 0.0)))) : 0,
-      posture: visual ? Math.max(0, Math.min(100, pct(1 - (visual.head_down ?? 0.0)))) : 0,
-      engagement: visual ? Math.max(0, Math.min(100, pct(visual.gesture_energy ?? 0.0))) : 0,
-      stressScore,
-      eyeContactScore: visual ? Math.max(0, Math.min(100, pct(1 - (visual.gaze_away ?? 0.0)))) : 0,
-      handGestureScore: visual ? Math.max(0, Math.min(100, pct(visual.gesture_energy ?? 0.0))) : 0,
-    },
-    language: {
-      primaryLanguage: language.primary === "hi" ? "Hindi" : language.primary === "mixed" ? "Mixed" : "English",
-      codeSwitchingDetected: (language.code_switch_rate ?? 0) > 0.2,
-      englishArticulation: pct(language.primary_ratio ?? fused.language_stability, 0.0),
-    },
-    overallScore: overall,
-    improvements,
+    content:{correctness:pct(content.correctness),relevance:pct(content.relevance),topicUnderstanding:pct(content.coverage)},
+    communication:{structure:pct(fused.structure),clarity:fluency,coherence:pct(fused.structure),fluency},
+    voice:{speakingRateWpm:Math.round(wpm),fillerCount:fillersMeasured ? number(acoustic.filler_count) : null,fillerRatePercent:fillersMeasured ? number(acoustic.filler_rate) : null,
+      fillerDetectionStatus:text(fillerDetection.status) || "unavailable",
+      fillerEvents:Array.isArray(acoustic.filler_events) ? acoustic.filler_events.map(value=>{const event=object(value);return {start_sec:number(event.start_sec),end_sec:number(event.end_sec),confidence:number(event.confidence),source:text(event.source)||"unknown",text:text(event.text)};}) : [],
+      pauseCount:number(acoustic.pause_count),pauseRatioPercent:pct(acoustic.pause_ratio),responseLatencySeconds:number(acoustic.response_latency_sec)},
+    visual:{gaze:inversePct(visual.gaze_away),posture:inversePct(visual.head_down),engagement:pct(visual.gesture_energy),
+      stressScore:pct(visual.stress_score),eyeContactScore:inversePct(visual.gaze_away),handGestureScore:pct(visual.gesture_energy)},
+    language:{primaryLanguage:primary ? languageNames[primary] || primary : "Unknown",codeSwitchingDetected:number(language.code_switch_rate)===null ? null : Number(language.code_switch_rate)>0,
+      englishArticulation:pct(language.primary_ratio)},
+    overallScore:Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100),
+    structureAvailable:number(fused.structure)!==null,contentAvailable:content.validation_status==="llm_reviewed",
+    visualAvailable:quality.video_ok===true && bundle.visual!==null,
+    transcript:text(transcript.text),wordTimestamps:Array.isArray(transcript.words) ? transcript.words as AttemptAnalysis["wordTimestamps"] : [],
+    answerFeedback:text(content.feedback),referenceAnswer:text(content.reference_answer),
+    improvements:text(content.feedback) ? [String(content.feedback)] : [],
   };
 }
 
-export function mapDiagnosis(d: any): FailureDiagnosis {
-  const condition = String(d?.condition || "ramble");
-  const confMap: Record<string, number> = { low: 0.45, medium: 0.7, high: 0.9 };
-  return {
-    headline: condition.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-    explanation: String(d?.rationale || "Pressure exposed a communication gap relative to baseline."),
-    deltas: [],
-    rootCause:
-      condition === "language_instability"
-        ? "language-transfer"
-        : condition === "fluency_breakdown" || condition === "freeze"
-          ? "pressure-structure-collapse"
-          : "recovery-failure",
-    confidence: confMap[String(d?.confidence || "medium")] ?? 0.7,
-    occurrences: 1,
-  };
+export function mapDiagnosis(value: unknown): FailureDiagnosis {
+  const d=object(value), condition=text(d.condition), rationale=text(d.rationale);
+  if (!condition || !rationale) throw new Error("The diagnosis is not ready. Please retry.");
+  return {headline:condition.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()),explanation:rationale,
+    deltas:Array.isArray(d.metric_rows) ? comparisonToDeltas({rows:d.metric_rows}) : [],
+    rootCause:null,confidence:null,occurrences:number(d.attempt_count)};
 }
 
-export function challengeToUi(c: any, topic: string): TargetedChallenge {
-  const spec = c?.training_spec || {};
-  return {
-    id: c?.id || `challenge-${Date.now()}`,
-    objective: String(spec.objective || "Recover structure under time pressure"),
-    framework: ["Definition", "Reason", "Example"],
-    prompt: String(c?.prompt_text || `Retry explaining ${topic} in 20 seconds.`),
-    timeLimitSeconds: Number(spec.time_limit_sec || 20),
-    weaknessTargeted: String(spec.objective || "structure"),
-  };
+export function challengeToUi(value: unknown, topic: string): TargetedChallenge {
+  const c=object(value),spec=object(c.training_spec);
+  const prompt=text(c.prompt_text),objective=text(spec.objective),limit=number(spec.time_limit_sec);
+  if (!prompt || !objective || limit===null) throw new Error("The challenge is not ready. Please retry.");
+  return {id:text(c.id) || `challenge-${topic}`,objective,framework:Array.isArray(c.framework) ? c.framework.filter((v): v is string=>typeof v==="string") : [],
+    prompt,timeLimitSeconds:limit,weaknessTargeted:objective};
 }
 
-export function comparisonToDeltas(report: any): DiagnosisMetricDelta[] {
-  const rows = Array.isArray(report?.rows) ? report.rows : [];
-  return rows.map((r: any) => {
-    const metric = String(r.metric || "");
-    const lowerBetter = metric.includes("pause") || metric.includes("filler") || metric.includes("gaze") || metric.includes("freeze") || metric.includes("stress");
-    const scale = metric.includes("fused") || metric.includes("content") || metric.includes("language") || metric.includes("visual") ? 100 : 1;
-    return {
-      label: metric.split(".").pop() || metric,
-      before: Math.round(Number(r.a) * scale),
-      after: Math.round(Number(r.b) * scale),
-      unit: lowerBetter ? ("count" as const) : ("%" as const),
-      direction: lowerBetter ? ("up-is-bad" as const) : ("down-is-bad" as const),
-    };
+export function comparisonToDeltas(value: unknown): DiagnosisMetricDelta[] {
+  const report=object(value);
+  if (!Array.isArray(report.rows)) throw new Error("The comparison is not ready.");
+  return report.rows.map(value=>{
+    const r=object(value),metric=text(r.metric),before=number(r.a),after=number(r.b);
+    if (!metric || before===null || after===null) throw new Error("The comparison contains an invalid measurement.");
+    const ratio=metric.startsWith("fused.") || metric.startsWith("content.") || metric.startsWith("visual.") || metric.endsWith("pause_ratio") || metric.endsWith("primary_ratio");
+    const lower=["pause","filler","gaze","freeze","stress"].some(name=>metric.includes(name));
+    return {label:metric.split(".").pop()!.replace(/_/g," "),before:Math.round(before*(ratio?100:1)*10)/10,after:Math.round(after*(ratio?100:1)*10)/10,
+      unit:ratio ? "%" : metric.endsWith("wpm") ? "WPM" : metric.endsWith("filler_rate") ? "per 100 words" : "count",direction:lower ? "up-is-bad" : "down-is-bad"};
   });
 }

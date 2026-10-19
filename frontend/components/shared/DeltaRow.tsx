@@ -16,6 +16,7 @@ function formatValue(v: number, unit: DiagnosisMetricDelta["unit"]) {
   if (unit === "%") return `${Math.round(v)}%`;
   if (unit === "s") return `${v}s`;
   if (unit === "x") return `${v}×`;
+  if (unit === "WPM" || unit === "per 100 words") return `${v} ${unit}`;
   return `${Math.round(v)}`;
 }
 

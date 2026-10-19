@@ -5,11 +5,11 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import type { RecoveryResult } from "@/mock/recovery";
+import type { RecoveryResult } from "@/lib/types";
 import { CheckCircle2, ArrowRight } from "lucide-react";
 
 const verdictCopy: Record<RecoveryResult["verdict"], string> = {
-  "strong-recovery": "You recovered structure and fluency within ~2 seconds of the interruption; this is a low-impact condition for you.",
+  "strong-recovery": "Your measured fluency and structure were maintained after the interruption.",
   "partial-recovery": "You recovered most of your structure, but fluency took longer to settle back in.",
   "weak-recovery": "Structure and fluency both dropped and stayed lower for the rest of the answer.",
 };
@@ -25,8 +25,8 @@ export function RecoveryResultPanel({ result }: { result: RecoveryResult }) {
           </Badge>
           <h2 className="font-display text-2xl text-ink sm:text-[1.7rem]">{verdictCopy[result.verdict]}</h2>
           <p className="mt-3 font-mono text-sm text-ink-soft">
-            Recovery time: <span className="font-semibold text-ink">{result.recoverySeconds}s</span> · Relevance
-            maintained: <span className="font-semibold text-ink">{result.relevanceMaintained ? "Yes" : "No"}</span>
+            Recovery time: <span className="font-semibold text-ink">{result.recoverySeconds === null ? "Not measured" : `${result.recoverySeconds.toFixed(2)}s`}</span> · Relevance
+            maintained: <span className="font-semibold text-ink">{result.relevanceMaintained === null ? "Not validated" : result.relevanceMaintained ? "Yes" : "No"}</span>
           </p>
         </div>
 
@@ -53,14 +53,14 @@ export function RecoveryResultPanel({ result }: { result: RecoveryResult }) {
   );
 }
 
-function MetricCol({ label, structure, fluency, pad = false }: { label: string; structure: number; fluency: number; pad?: boolean }) {
+function MetricCol({ label, structure, fluency, pad = false }: { label: string; structure: number | null; fluency: number; pad?: boolean }) {
   return (
     <div className={pad ? "pl-6" : "pr-6"}>
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
       <div className="flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
           <span className="text-ink-soft">Structure</span>
-          <span className="font-mono font-semibold text-ink">{structure}%</span>
+          <span className="font-mono font-semibold text-ink">{structure === null ? "Not measured" : `${structure}%`}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-ink-soft">Fluency</span>

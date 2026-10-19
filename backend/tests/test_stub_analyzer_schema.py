@@ -1,4 +1,4 @@
-from app.ml.stub_analyzer import StubAnalyzer
+from stub_analyzer_fixture import StubAnalyzer
 from app.ml.types import AnalysisConfig, AttemptMedia, Transcript
 
 

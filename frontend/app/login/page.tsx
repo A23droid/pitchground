@@ -8,8 +8,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Logo } from "@/components/shared/Logo";
 import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
-import { saveAuth, saveToken, nameFromEmail, loginWithDemo } from "@/lib/auth";
-import { API_URL } from "@/lib/api";
+import { completeTokenLogin, loginWithDemo } from "@/lib/auth";
+import { API_URL, authJson } from "@/lib/api";
 import { ArrowRight, Mail, Lock } from "lucide-react";
 
 export default function LoginPage() {
@@ -35,31 +35,16 @@ function LoginForm() {
     setSubmitting(true);
     setErrorMsg("");
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const data = await authJson<{ access_token: string }>("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Failed to login");
-      }
-      const data = await res.json();
-      saveToken(data.access_token);
-
-      const meRes = await fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${data.access_token}` },
-      });
-      if (meRes.ok) {
-        const meData = await meRes.json();
-        saveAuth({ name: meData.name || nameFromEmail(email), email: meData.email, learnerId: meData.learner_id || meData.id });
-      } else {
-        saveAuth({ name: nameFromEmail(email), email });
-      }
+      await completeTokenLogin(data.access_token);
 
       router.push("/dashboard");
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Could not sign in.");
       setSubmitting(false);
     }
   }
@@ -69,7 +54,8 @@ function LoginForm() {
     try {
       await loginWithDemo();
       router.push("/dashboard");
-    } catch {
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Demo sign-in failed.");
       setDemoLoading(false);
     }
   }
@@ -97,7 +83,7 @@ function LoginForm() {
 
           {googleError ? (
             <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
-              Google sign-in failed. In Google Cloud, add this exact redirect URI:
+              Google sign-in could not complete. Please retry. If this persists, check the configured callback:
               <span className="mt-1 block font-mono">{API_URL}/auth/google/callback</span>
             </p>
           ) : null}
@@ -154,7 +140,7 @@ function LoginForm() {
             disabled={demoLoading}
             className="w-full rounded-xl border border-dashed border-lavender-ink/40 bg-lavender/40 px-4 py-3 text-sm font-medium text-lavender-ink transition-all duration-200 hover:bg-lavender/70 disabled:opacity-60"
           >
-            {demoLoading ? "Loading demo…" : "Try demo (no account needed)"}
+            {demoLoading ? "Loading demo…" : "Try guest practice (no account needed)"}
           </button>
 
           <div className="mt-3">

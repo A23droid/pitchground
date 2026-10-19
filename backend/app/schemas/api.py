@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class LearnerCreate(BaseModel):
@@ -21,11 +21,18 @@ class LearnerOut(BaseModel):
 class SessionCreate(BaseModel):
     learner_id: str | None = None
     mode: Literal["interview", "debate", "impromptu", "language-diagnostic", "recovery-training"] = "interview"
-    topic: str = "Database Systems"
+    topic: str = Field(min_length=2, max_length=2000, pattern=r"\S")
     audience: str = ""
     language: str = "English"
     difficulty: str = "Standard"
     policy: dict[str, Any] | None = None
+
+    @field_validator("policy")
+    @classmethod
+    def reject_client_policy(cls, value):
+        if value:
+            raise ValueError("Practice policy is managed by the server; use the session setup fields.")
+        return value
 
 
 class AdvanceBody(BaseModel):
@@ -33,7 +40,10 @@ class AdvanceBody(BaseModel):
 
 
 class AttemptCreate(BaseModel):
+    interruption_sec: float | None = Field(default=None, ge=0, le=3600)
     role: str = "baseline"
+    language: Literal["en", "hi", "ml", "auto"] | None = None
+    prompt: str | None = Field(default=None, min_length=2, max_length=4000)
 
 
 class SessionFinish(BaseModel):

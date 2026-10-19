@@ -1,29 +1,4 @@
-import type { Audience, Difficulty, InterviewType, Language } from "@/lib/types";
-
-export const interviewTypes: { value: InterviewType; label: string; description: string; available: boolean }[] = [
-  {
-    value: "Technical Interview",
-    label: "Technical interview",
-    description: "Concept explanations, trade-offs, and follow-up pressure rounds.",
-    available: true,
-  },
-];
-
-export const comingSoonModes = [
-  { label: "Debate", description: "Argue a position and defend it under rebuttal." },
-  { label: "Presentation", description: "Structured delivery with a live slide pace-check." },
-  { label: "Impromptu", description: "60-second answers on a topic you didn't pick." },
-  { label: "Teach-back", description: "Explain a concept so a novice could follow it." },
-];
-
-export const topics = [
-  "Database Systems",
-  "Operating Systems",
-  "System Design",
-  "Networking",
-  "Data Structures & Algorithms",
-  "Object-Oriented Design",
-];
+import type { Audience, Difficulty, Language } from "@/lib/types";
 
 export const audiences: { value: Audience; description: string }[] = [
   { value: "Technical interviewer", description: "Precise, follow-up heavy, expects trade-offs." },

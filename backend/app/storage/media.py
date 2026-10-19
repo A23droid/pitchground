@@ -72,11 +72,7 @@ logger = logging.getLogger(__name__)
 
 async def save_upload(session_id: str, attempt_id: str, field: str, filename: str, data: bytes) -> str:
     if STORAGE_BACKEND == "nhost":
-        try:
-            return await _save_nhost(session_id, attempt_id, field, filename, data)
-        except Exception as exc:
-            logger.warning("Nhost storage upload failed (%s); falling back to local storage", exc)
-            return await _save_local(session_id, attempt_id, field, filename, data)
+        return await _save_nhost(session_id, attempt_id, field, filename, data)
     return await _save_local(session_id, attempt_id, field, filename, data)
 
 

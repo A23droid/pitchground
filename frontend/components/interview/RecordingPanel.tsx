@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, CameraOff, Mic, Timer as TimerIcon, ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import type { RoundQuestion } from "@/lib/types";
+import { stopSpeechPlayback } from "@/lib/opponentSpeech";
 
 export interface RecordingSubmitPayload {
   audioBlob: Blob;
@@ -17,12 +18,9 @@ export interface RecordingSubmitPayload {
 
 export function RecordingPanel({
   question,
-  transcript,
   onSubmit,
 }: {
   question: RoundQuestion;
-  /** When set, uses mock typed transcript (debate/impromptu P1) instead of live upload. */
-  transcript?: string;
   language?: string;
   onSubmit: (payload: RecordingSubmitPayload) => void;
 }) {
@@ -31,15 +29,18 @@ export function RecordingPanel({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const finishingRef = useRef(false);
-  const mockMode = Boolean(transcript);
+  const attachedVideo = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    if (node && streamRef.current) { node.srcObject = streamRef.current; void node.play().catch(() => {}); }
+  }, []);
 
   const [cameraState, setCameraState] = useState<"pending" | "live" | "unavailable">("pending");
   const [phase, setPhase] = useState<"ready" | "recording" | "recorded">("ready");
   const [error, setError] = useState<string | null>(null);
+  const [microphoneReady, setMicrophoneReady] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(question.timeLimitSeconds ?? 0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
-  const [typedTranscript, setTypedTranscript] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +53,7 @@ export function RecordingPanel({
           return;
         }
         streamRef.current = stream;
+        setMicrophoneReady(true);
         if (videoRef.current) videoRef.current.srcObject = stream;
         setCameraState("live");
       } catch {
@@ -62,9 +64,10 @@ export function RecordingPanel({
             return;
           }
           streamRef.current = audioOnly;
+          setMicrophoneReady(true);
           setCameraState("unavailable");
         } catch {
-          if (!cancelled) setCameraState("unavailable");
+          if (!cancelled) { setCameraState("unavailable"); setError("Microphone permission is required. Allow access in your browser and reload this page."); }
         }
       }
     };
@@ -73,11 +76,17 @@ export function RecordingPanel({
       void startCamera();
     } else {
       setCameraState("unavailable");
+      setError("Microphone recording requires a supported browser on HTTPS or localhost.");
     }
 
     return () => {
       cancelled = true;
-      mediaRecorderRef.current?.stop();
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.onerror = null;
+        mediaRecorderRef.current.ondataavailable = null;
+        if (mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
+      }
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
@@ -94,35 +103,18 @@ export function RecordingPanel({
     finishingRef.current = true;
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") {
-      setPhase("recorded");
+      finishingRef.current = false; setPhase("ready"); setError("No active recording. Please record your answer again.");
       return;
     }
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+      if (blob.size < 200) { setPhase("ready"); setError("The recording is empty. Please try again."); return; }
       setAudioBlob(blob);
-      if (cameraState === "live") setVideoBlob(blob);
+      if (cameraState === "live" && blob.type.startsWith("video/")) setVideoBlob(blob);
       setPhase("recorded");
     };
     recorder.stop();
   }
-
-  useEffect(() => {
-    if (!mockMode || phase !== "recording" || !transcript) return;
-    setTypedTranscript("");
-    let i = 0;
-    const speed = question.timeLimitSeconds ? 14 : 22;
-    const interval = setInterval(() => {
-      i += 3;
-      setTypedTranscript(transcript.slice(0, i));
-      if (i >= transcript.length) {
-        clearInterval(interval);
-        const empty = new Blob([new Uint8Array(1024)], { type: "audio/webm" });
-        setAudioBlob(empty);
-        setPhase("recorded");
-      }
-    }, speed);
-    return () => clearInterval(interval);
-  }, [phase, mockMode, transcript, question.timeLimitSeconds]);
 
   function pickRecorderMime(hasVideo: boolean): string | undefined {
     const candidates = hasVideo
@@ -143,6 +135,8 @@ export function RecordingPanel({
   }
 
   function startRecording() {
+    if (mediaRecorderRef.current?.state === "recording") return;
+    stopSpeechPlayback();
     setError(null);
     finishingRef.current = false;
     setSecondsLeft(question.timeLimitSeconds ?? 0);
@@ -150,18 +144,9 @@ export function RecordingPanel({
     setVideoBlob(null);
     chunksRef.current = [];
 
-    if (mockMode) {
-      setTypedTranscript("");
-      setPhase("recording");
-      return;
-    }
-
     const stream = streamRef.current;
-    if (!stream || stream.getAudioTracks().length === 0) {
-      const empty = new Blob([new Uint8Array(2048)], { type: "audio/webm" });
-      setAudioBlob(empty);
-      setPhase("recorded");
-      setError("No microphone — submitting a placeholder clip for stub analysis.");
+    if (!stream || !stream.getAudioTracks().some((track) => track.readyState === "live")) {
+      setError("Microphone unavailable. Allow microphone access and try again.");
       return;
     }
 
@@ -173,7 +158,7 @@ export function RecordingPanel({
     // Audio-only stream for MediaRecorder — mixing video+audio tracks with an
     // audio/* mimeType often throws "error starting the MediaRecorder" in Chrome.
     const audioOnly = new MediaStream(stream.getAudioTracks());
-    const mime = pickRecorderMime(false);
+    const mime = pickRecorderMime(stream.getVideoTracks().length > 0);
 
     const tryStart = (source: MediaStream, mimeType?: string) => {
       const recorder = mimeType ? new MediaRecorder(source, { mimeType }) : new MediaRecorder(source);
@@ -182,14 +167,15 @@ export function RecordingPanel({
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onerror = () => {
-        setError("Recorder error — try End response, or refresh and use Submit with a placeholder.");
+        setError("Recording failed. Please record your response again.");
+        setAudioBlob(null); setVideoBlob(null); setPhase("ready");
       };
       recorder.start(250);
       setPhase("recording");
     };
 
     try {
-      tryStart(audioOnly, mime);
+      tryStart(stream.getVideoTracks().length && mime?.startsWith("video/") ? stream : audioOnly, mime);
     } catch {
       try {
         // Retry with browser default mime on audio-only stream
@@ -199,14 +185,8 @@ export function RecordingPanel({
           // Last resort: full A/V stream + video mime
           tryStart(stream, pickRecorderMime(true));
         } catch (err) {
-          const empty = new Blob([new Uint8Array(2048)], { type: "audio/webm" });
-          setAudioBlob(empty);
-          setPhase("recorded");
-          setError(
-            err instanceof Error
-              ? `${err.message} — using placeholder clip so you can still submit.`
-              : "Recorder failed — using placeholder clip so you can still submit.",
-          );
+          setPhase("ready");
+          setError(err instanceof Error ? err.message : "Recorder failed. Please retry.");
         }
       }
     }
@@ -231,7 +211,7 @@ export function RecordingPanel({
       <Card className="relative flex flex-col overflow-hidden p-0">
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal lg:aspect-auto lg:min-h-[280px] lg:flex-1">
           <video
-            ref={videoRef}
+            ref={attachedVideo}
             autoPlay
             muted
             playsInline
@@ -313,19 +293,11 @@ export function RecordingPanel({
             Response
           </div>
           <div className="min-h-[56px] text-sm leading-relaxed text-ink-soft sm:min-h-[64px]">
-            {mockMode ? (
-              phase === "ready" ? (
-                <span className="text-muted">Your response will appear here as you speak…</span>
-              ) : (
-                typedTranscript || (phase === "recording" ? "…" : "")
-              )
-            ) : (
-              <>
-                {phase === "ready" && <span className="text-muted">Press start — audio uploads to Pitchground for scoring.</span>}
-                {phase === "recording" && <span>Recording… transcript arrives after analysis.</span>}
-                {phase === "recorded" && <span>Ready to submit. Backend will transcribe and score this clip.</span>}
-              </>
-            )}
+            <>
+              {phase === "ready" && <span className="text-muted">Press start to record your response.</span>}
+              {phase === "recording" && <span>Recording… transcript arrives after analysis.</span>}
+              {phase === "recorded" && <span>Ready to submit your recorded response.</span>}
+            </>
           </div>
           {error && <p className="mt-2 text-xs text-rose-ink">{error}</p>}
         </div>
@@ -334,7 +306,7 @@ export function RecordingPanel({
           <AnimatePresence mode="wait">
             {phase === "ready" && (
               <motion.div key="start" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full sm:w-auto">
-                <Button size="lg" onClick={startRecording} className="w-full sm:w-auto">
+                <Button size="lg" disabled={!microphoneReady} onClick={startRecording} className="w-full sm:w-auto">
                   <Mic size={16} />
                   Start answering
                 </Button>
@@ -349,6 +321,7 @@ export function RecordingPanel({
             )}
             {phase === "recorded" && (
               <motion.div key="submit" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="w-full sm:w-auto">
+                <Button size="sm" variant="outline" onClick={startRecording} className="mb-2 mr-2">Record again</Button>
                 <Button
                   size="lg"
                   disabled={!audioBlob}
@@ -357,7 +330,6 @@ export function RecordingPanel({
                     onSubmit({
                       audioBlob,
                       videoBlob,
-                      transcript: mockMode ? transcript || typedTranscript : undefined,
                     })
                   }
                   className="w-full sm:w-auto"
