@@ -20,7 +20,7 @@ class LearnerOut(BaseModel):
 
 class SessionCreate(BaseModel):
     learner_id: str | None = None
-    mode: Literal["interview", "debate", "impromptu", "language-diagnostic"] = "interview"
+    mode: Literal["interview", "debate", "impromptu", "language-diagnostic", "recovery-training"] = "interview"
     topic: str = "Database Systems"
     audience: str = ""
     language: str = "English"
@@ -33,7 +33,7 @@ class AdvanceBody(BaseModel):
 
 
 class AttemptCreate(BaseModel):
-    role: Literal["baseline", "pressure", "retry"]
+    role: str = "baseline"
 
 
 class SessionFinish(BaseModel):

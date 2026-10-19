@@ -8,27 +8,34 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
   const visual = bundle?.visual;
   const language = bundle?.language || {};
 
-  const pct = (v: number | undefined, fallback = 0.5) => Math.round((v ?? fallback) * 100);
+  const pct = (v: number | undefined, fallback = 0.0) => Math.round((v ?? fallback) * 100);
 
   const structure = pct(fused.structure);
   const fluency = pct(fused.fluency);
   const composure = pct(fused.composure);
   const presence = pct(fused.presence);
   const contentScore = pct(content.coverage ?? fused.content);
-  const overall = Math.round((structure + fluency + composure + presence + contentScore) / 5);
+  const activeScores = [structure, fluency, composure, presence, contentScore].filter((s) => s > 0);
+  const overall = activeScores.length > 0
+    ? Math.round(activeScores.reduce((a, b) => a + b, 0) / activeScores.length)
+    : 0;
 
-  // Compute camera stress level (0-100) based on freeze ratio, gaze instability, and vocal tremor
-  const freezeRatio = visual?.freeze_ratio ?? 0.05;
-  const gazeAway = visual?.gaze_away ?? 0.1;
-  const energyVar = acoustic?.energy_var ?? 0.1;
-  const stressRaw = (freezeRatio * 0.4 + gazeAway * 0.35 + Math.min(1.0, energyVar * 2) * 0.25) * 100;
-  const stressScore = Math.min(100, Math.max(0, Math.round(stressRaw)));
+  // Compute camera stress level (0-100) based on dynamic CV/Audio signals
+  const freezeRatio = visual?.freeze_ratio ?? 0.0;
+  const gazeAway = visual?.gaze_away ?? 0.0;
+  const energyVar = acoustic?.energy_var ?? 0.0;
+  const stressRaw = visual
+    ? (freezeRatio * 0.4 + gazeAway * 0.35 + Math.min(1.0, energyVar * 2) * 0.25) * 100
+    : Math.min(1.0, energyVar * 2) * 50;
+  const stressScore = visual?.stress_score !== undefined
+    ? Math.round(visual.stress_score * 100)
+    : Math.min(100, Math.max(0, Math.round(stressRaw)));
 
   // Generate actionable improvement suggestions based on ML metrics
   const improvements: string[] = [];
-  const wpm = acoustic.wpm ?? 120;
+  const wpm = acoustic.wpm ?? 0;
   const fillerRate = acoustic.filler_rate ?? 0;
-  const pauseRatio = acoustic.pause_ratio ?? 0.15;
+  const pauseRatio = acoustic.pause_ratio ?? 0;
 
   if (fillerRate > 6) {
     improvements.push(`High conversational filler rate (${fillerRate.toFixed(1)}%). Practice substituting deliberate 1-second pauses instead of vocalizing 'um', 'uh', or 'basically'.`);
@@ -38,7 +45,7 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
 
   if (wpm > 165) {
     improvements.push(`Speaking pace is fast (${Math.round(wpm)} WPM). Modulate your delivery closer to 130–150 WPM to project control.`);
-  } else if (wpm < 105) {
+  } else if (wpm > 0 && wpm < 105) {
     improvements.push(`Cadence is measured (${Math.round(wpm)} WPM). Slightly increase pacing to convey energy and enthusiasm.`);
   }
 
@@ -53,7 +60,7 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
     if ((visual.head_down ?? 0) > 0.25) {
       improvements.push("Head tilt angle drifted downward. Keep your posture aligned with the frame.");
     }
-    if ((visual.gesture_energy ?? 0.4) < 0.2) {
+    if ((visual.gesture_energy ?? 0.0) < 0.2 && (visual.gesture_energy ?? 0.0) > 0) {
       improvements.push("Body posture was rigid. Natural, open hand gestures help emphasize key architectural trade-offs.");
     }
   }
@@ -70,7 +77,7 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
     attemptId,
     content: {
       correctness: contentScore,
-      relevance: pct(content.specificity, 0.6),
+      relevance: pct(content.specificity, 0.0),
       topicUnderstanding: contentScore,
     },
     communication: {
@@ -81,24 +88,24 @@ export function signalBundleToAttemptAnalysis(bundle: any, attemptId: string): A
     },
     voice: {
       speakingRateWpm: Math.round(wpm),
-      fillerCount: Math.round(acoustic.filler_rate ?? 2),
+      fillerCount: Math.round(acoustic.filler_rate ?? 0),
       fillerRatePercent: Number(fillerRate.toFixed(1)),
       pauseCount: Math.round(pauseRatio * 10),
       pauseRatioPercent: Math.round(pauseRatio * 100),
       responseLatencySeconds: Number((pauseRatio * 2).toFixed(1)),
     },
     visual: {
-      gaze: visual ? pct(1 - (visual.gaze_away ?? 0.1)) : 75,
-      posture: visual ? pct(1 - (visual.head_down ?? 0.1)) : 75,
-      engagement: visual ? pct(visual.gesture_energy ?? 0.4) : 70,
+      gaze: visual ? Math.max(0, Math.min(100, pct(1 - (visual.gaze_away ?? 0.0)))) : 0,
+      posture: visual ? Math.max(0, Math.min(100, pct(1 - (visual.head_down ?? 0.0)))) : 0,
+      engagement: visual ? Math.max(0, Math.min(100, pct(visual.gesture_energy ?? 0.0))) : 0,
       stressScore,
-      eyeContactScore: visual ? pct(1 - (visual.gaze_away ?? 0.1)) : 75,
-      handGestureScore: visual ? pct(visual.gesture_energy ?? 0.4) : 70,
+      eyeContactScore: visual ? Math.max(0, Math.min(100, pct(1 - (visual.gaze_away ?? 0.0)))) : 0,
+      handGestureScore: visual ? Math.max(0, Math.min(100, pct(visual.gesture_energy ?? 0.0))) : 0,
     },
     language: {
       primaryLanguage: language.primary === "hi" ? "Hindi" : language.primary === "mixed" ? "Mixed" : "English",
       codeSwitchingDetected: (language.code_switch_rate ?? 0) > 0.2,
-      englishArticulation: pct(language.primary_ratio ?? fused.language_stability, 0.8),
+      englishArticulation: pct(language.primary_ratio ?? fused.language_stability, 0.0),
     },
     overallScore: overall,
     improvements,
@@ -139,8 +146,8 @@ export function comparisonToDeltas(report: any): DiagnosisMetricDelta[] {
   const rows = Array.isArray(report?.rows) ? report.rows : [];
   return rows.map((r: any) => {
     const metric = String(r.metric || "");
-    const lowerBetter = metric.includes("pause") || metric.includes("filler");
-    const scale = metric.includes("fused") || metric.includes("content") || metric.includes("language") ? 100 : 1;
+    const lowerBetter = metric.includes("pause") || metric.includes("filler") || metric.includes("gaze") || metric.includes("freeze") || metric.includes("stress");
+    const scale = metric.includes("fused") || metric.includes("content") || metric.includes("language") || metric.includes("visual") ? 100 : 1;
     return {
       label: metric.split(".").pop() || metric,
       before: Math.round(Number(r.a) * scale),

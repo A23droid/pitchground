@@ -18,6 +18,8 @@ type Stage = "intro" | "question" | "analyzing" | "result";
 export default function RecoveryTrainingPage() {
   const [stage, setStage] = useState<Stage>("intro");
   const [result, setResult] = useState<RecoveryResult | null>(null);
+  const [userTranscript, setUserTranscript] = useState<string>("");
+  const [userLatency, setUserLatency] = useState<number>(0);
 
   return (
     <div className="mx-auto mt-8 w-full max-w-3xl px-4 sm:px-6">
@@ -51,7 +53,11 @@ export default function RecoveryTrainingPage() {
             <InterruptionRecordingPanel
               prompt={interruptionPrompt}
               transcript={recoveryTranscript}
-              onSubmit={() => setStage("analyzing")}
+              onSubmit={(finalText, latency) => {
+                setUserTranscript(finalText);
+                setUserLatency(latency);
+                setStage("analyzing");
+              }}
             />
           )}
 
@@ -59,7 +65,7 @@ export default function RecoveryTrainingPage() {
             <AnalyzingState
               stages={[...ANALYSIS_STAGES, "Measuring recovery..."]}
               onDone={() => {
-                setResult(generateRecoveryResult());
+                setResult(generateRecoveryResult(userTranscript, userLatency));
                 setStage("result");
               }}
             />

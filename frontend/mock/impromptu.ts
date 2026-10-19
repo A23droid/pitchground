@@ -77,41 +77,150 @@ export function getImpromptuTranscript(topicId: string, language: Language): str
   return langTable[topicId] ?? langTable.default;
 }
 
-export function generateImpromptuAnalysis(config: ImpromptuConfig): ImpromptuAnalysis {
+export function generateImpromptuAnalysis(
+  config: ImpromptuConfig,
+  transcript?: string,
+  sttMetrics?: { wpm?: number; filler_rate?: number; pause_ratio?: number; code_switch_rate?: number } | null,
+  visualMetrics?: ImpromptuAnalysis["visualMetrics"] | null,
+): ImpromptuAnalysis {
   const duration = config.durationSeconds;
   const isMultilingual = config.language !== "English";
+  const durMin = duration / 60;
 
-  // Build fluency decay timeline matching the demo story:
-  // Starts strong (~150 WPM, 0 fillers), decays at 35s+ (90 WPM, filler spike, word repetition).
-  const timeline: ImpromptuFluencyPoint[] = [
-    { second: 5, wpm: 148, fillerDensity: 0, repetitionCount: 0 },
-    { second: 15, wpm: 152, fillerDensity: 1, repetitionCount: 0 },
-    { second: 25, wpm: 140, fillerDensity: 2, repetitionCount: 1 },
-    { second: 35, wpm: 110, fillerDensity: 6, repetitionCount: 4 },
-    { second: 45, wpm: 92, fillerDensity: 11, repetitionCount: 8 },
-    { second: Math.min(60, duration), wpm: 84, fillerDensity: 14, repetitionCount: 12 },
-  ];
+  const words = (transcript || "").trim().split(/\s+/).filter(Boolean);
+  const totalWords = words.length;
+
+  if (totalWords === 0) {
+    return {
+      fluencyTimeline: [5, 15, 25, 35, 45, Math.min(60, duration)].map((sec) => ({
+        second: sec,
+        wpm: 0,
+        fillerDensity: 0,
+        repetitionCount: 0,
+      })),
+      initialWpm: 0,
+      finalWpm: 0,
+      repetitionCount: 0,
+      fillerCount: 0,
+      coherence: 0,
+      lexicalDiversity: 0,
+      overallScore: 0,
+      language: config.language,
+      codeSwitchingDetected: false,
+    };
+  }
+
+  // 1. Measured WPM
+  const measuredWpm = sttMetrics?.wpm && sttMetrics.wpm > 0
+    ? Math.round(sttMetrics.wpm)
+    : Math.min(220, Math.max(30, Math.round(totalWords / durMin)));
+
+  // 2. Real fillers
+  const fillerRegex = /\b(uh+|um+|ah+|eh+|er+|mm+|hmm+|like|you know|basically|so to say)\b/gi;
+  const fillerMatches = (transcript || "").match(fillerRegex) || [];
+  const fillerCount = sttMetrics?.filler_rate !== undefined
+    ? Math.round((sttMetrics.filler_rate / 100) * totalWords)
+    : fillerMatches.length;
+
+  // 3. Exact word/phrase repetitions
+  let repetitionCount = 0;
+  for (let i = 1; i < words.length; i++) {
+    if (words[i].toLowerCase() === words[i - 1].toLowerCase()) repetitionCount++;
+    if (i >= 3 && words[i].toLowerCase() === words[i - 2].toLowerCase() && words[i - 1].toLowerCase() === words[i - 3].toLowerCase()) {
+      repetitionCount++;
+    }
+  }
+
+  // 4. Lexical diversity (Type-Token Ratio)
+  const uniqueWords = new Set(words.map((w) => w.toLowerCase().replace(/[^a-z0-9]/gi, "")).filter(Boolean));
+  const lexicalDiversity = Math.min(100, Math.max(15, Math.round((uniqueWords.size / totalWords) * 100)));
+
+  // 5. Pacing progression (first half vs second half)
+  const mid = Math.floor(totalWords / 2);
+  const firstHalf = words.slice(0, mid);
+  const secondHalf = words.slice(mid);
+  const initialWpm = firstHalf.length > 0 ? Math.min(220, Math.max(30, Math.round(firstHalf.length / (durMin / 2)))) : measuredWpm;
+  const finalWpm = secondHalf.length > 0 ? Math.min(220, Math.max(30, Math.round(secondHalf.length / (durMin / 2)))) : Math.round(measuredWpm * 0.9);
+
+  // 6. Coherence (content volume + vocabulary diversity - disfluency penalty)
+  const promptTokens = new Set(config.topic.prompt.toLowerCase().split(/\s+/).filter((w) => w.length > 4));
+  let promptHits = 0;
+  for (const w of words) {
+    if (promptTokens.has(w.toLowerCase())) promptHits++;
+  }
+  const coherence = Math.min(
+    100,
+    Math.max(
+      15,
+      Math.round(
+        Math.min(45, totalWords * 0.5) +
+        lexicalDiversity * 0.35 +
+        Math.min(20, promptHits * 5) -
+        Math.min(15, repetitionCount * 2) -
+        Math.min(15, fillerCount * 1.5),
+      ),
+    ),
+  );
+
+  // 7. Dynamic timeline points
+  const stepSeconds = [5, 15, 25, 35, 45, Math.min(60, duration)];
+  const timeline: ImpromptuFluencyPoint[] = stepSeconds.map((sec) => {
+    const fraction = sec / duration;
+    const currentWpm = Math.round(initialWpm + (finalWpm - initialWpm) * fraction);
+    const currentFillers = Math.round(fillerCount * fraction);
+    const currentReps = Math.round(repetitionCount * fraction);
+    return {
+      second: sec,
+      wpm: Math.max(30, currentWpm),
+      fillerDensity: currentFillers,
+      repetitionCount: currentReps,
+    };
+  });
+
+  // 8. Overall score calculation
+  const pacingScore = Math.max(15, Math.min(100, 100 - Math.abs(measuredWpm - 135) * 0.5 - fillerCount * 2));
+  const visualScore = visualMetrics ? Math.round((visualMetrics.eyeContact + visualMetrics.posture + visualMetrics.composure) / 3) : null;
+  const overallScore = visualScore !== null
+    ? Math.round(0.30 * coherence + 0.30 * lexicalDiversity + 0.25 * pacingScore + 0.15 * visualScore)
+    : Math.round(0.35 * coherence + 0.35 * lexicalDiversity + 0.30 * pacingScore);
 
   return {
     fluencyTimeline: timeline,
-    initialWpm: 150,
-    finalWpm: 88,
-    repetitionCount: 12,
-    fillerCount: 14,
-    coherence: 64,
-    lexicalDiversity: 58,
-    overallScore: 67,
+    initialWpm,
+    finalWpm,
+    repetitionCount,
+    fillerCount,
+    coherence,
+    lexicalDiversity,
+    overallScore,
     language: config.language,
-    codeSwitchingDetected: config.language === "Mixed",
+    codeSwitchingDetected: sttMetrics?.code_switch_rate !== undefined ? sttMetrics.code_switch_rate > 0.15 : config.language === "Mixed",
+    visualMetrics: visualMetrics || undefined,
   };
 }
 
 export function generateImpromptuDiagnosis(analysis: ImpromptuAnalysis): FailureDiagnosis {
+  if (analysis.overallScore === 0) {
+    return {
+      headline: "No speech detected during the recording session.",
+      explanation: "Pitchground did not detect audible speech in your impromptu response. Ensure your microphone is enabled and speak clearly throughout the prompt duration.",
+      deltas: [
+        { label: "Speaking pace", before: 0, after: 0, unit: "count", direction: "down-is-bad" },
+      ],
+      rootCause: "recovery-failure",
+      confidence: 0.95,
+      occurrences: 1,
+    };
+  }
+
   const wpmDrop = analysis.initialWpm - analysis.finalWpm;
 
   return {
-    headline: "You started with high fluency and strong conviction, but lexical momentum collapsed past the 30-second mark.",
-    explanation: `Your speech began at a brisk ${analysis.initialWpm} WPM with zero structural hesitation. However, once the initial thesis was expressed, speech rate dropped by ${wpmDrop} WPM (${analysis.finalWpm} WPM) and ${analysis.repetitionCount} circular phrase repetitions emerged. Rather than advancing into a concrete example or actionable conclusion, the answer circled back to restating the opening metaphor.`,
+    headline:
+      wpmDrop > 25
+        ? "You started with high fluency and strong conviction, but lexical momentum collapsed past the 30-second mark."
+        : "Maintained steady speech cadence and spontaneous idea formulation across the full duration.",
+    explanation: `Your speech began at a cadence of ${analysis.initialWpm} WPM and finished at ${analysis.finalWpm} WPM (pacing delta: ${wpmDrop > 0 ? "-" : "+"}${Math.abs(wpmDrop)} WPM). Lexical diversity reached ${analysis.lexicalDiversity}%, with ${analysis.repetitionCount} circular repetitions and ${analysis.fillerCount} vocalized fillers detected. Overall impromptu coherence scored ${analysis.coherence}%.`,
     deltas: [
       {
         label: "Speaking pace",
@@ -121,30 +230,30 @@ export function generateImpromptuDiagnosis(analysis: ImpromptuAnalysis): Failure
         direction: "down-is-bad",
       },
       {
-        label: "Filler density (late phase)",
-        before: 1,
-        after: 14,
+        label: "Filler density",
+        before: Math.max(0, Math.round(analysis.fillerCount * 0.2)),
+        after: analysis.fillerCount,
         unit: "count",
         direction: "up-is-bad",
       },
       {
         label: "Vocabulary variety",
-        before: 88,
-        after: 54,
+        before: Math.min(100, analysis.lexicalDiversity + 15),
+        after: analysis.lexicalDiversity,
         unit: "%",
         direction: "down-is-bad",
       },
       {
-        label: "Structural advancement",
-        before: 90,
-        after: 48,
+        label: "Structural coherence",
+        before: Math.min(100, analysis.coherence + 10),
+        after: analysis.coherence,
         unit: "%",
         direction: "down-is-bad",
       },
     ],
     rootCause: "pressure-structure-collapse",
     confidence: 0.91,
-    occurrences: 4,
+    occurrences: 3,
   };
 }
 

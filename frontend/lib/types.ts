@@ -246,6 +246,13 @@ export interface DebateRoundData {
   userTranscript: string;
   aiCounterTranscript?: string;
   timeLimitSeconds: number;
+  visualMetrics?: {
+    gaze_away: number;
+    head_down: number;
+    freeze_ratio: number;
+    gesture_energy: number;
+    stress_score: number;
+  };
 }
 
 export interface DebateAnalysis {
@@ -259,6 +266,12 @@ export interface DebateAnalysis {
   openingScore: number;
   rebuttalScore: number;
   keyObservation: string;
+  visualPresence?: {
+    eyeContact: number; // 0-100
+    posture: number; // 0-100
+    composure: number; // 0-100
+    stressLevel: number; // 0-100
+  };
 }
 
 export interface DebateReport {
@@ -305,6 +318,12 @@ export interface ImpromptuAnalysis {
   overallScore: number;
   language: Language;
   codeSwitchingDetected: boolean;
+  visualMetrics?: {
+    eyeContact: number;
+    posture: number;
+    composure: number;
+    stressScore: number;
+  };
 }
 
 export interface ImpromptuReport {

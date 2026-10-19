@@ -21,7 +21,13 @@ import {
   IMPROMPTU_ANALYSIS_STAGES,
 } from "@/services/impromptuService";
 import { saveGenericSession } from "@/services/learnerService";
-import { createSession } from "@/services/sessionService";
+import {
+  createSession,
+  createAttempt,
+  uploadAttemptMedia,
+  completeAttempt,
+  waitForAttemptComplete,
+} from "@/services/sessionService";
 import { transcribeAudioBlob } from "@/services/sttService";
 import type {
   Difficulty,
@@ -121,6 +127,7 @@ export default function ImpromptuPage() {
     }
   }
 
+  const [hasRecorded, setHasRecorded] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState<string>("");
   const [sttMetrics, setSttMetrics] = useState<{
     wpm: number;
@@ -129,9 +136,34 @@ export default function ImpromptuPage() {
     primary_language: string;
     code_switch_rate: number;
   } | null>(null);
+  const [visualMetrics, setVisualMetrics] = useState<ImpromptuAnalysis["visualMetrics"] | null>(null);
 
   async function handleSpeechSubmit(payload: RecordingSubmitPayload) {
+    setHasRecorded(true);
     setStage("analyzing");
+
+    // 1. Process CV video and acoustic media through backend attempt if session exists
+    if (sessionId && payload.audioBlob && payload.audioBlob.size > 200) {
+      try {
+        const att = await createAttempt(sessionId, "impromptu");
+        await uploadAttemptMedia(sessionId, att.id, payload.audioBlob, payload.videoBlob);
+        await completeAttempt(sessionId, att.id);
+        const completed = await waitForAttemptComplete(sessionId, att.id, 25000);
+        if (completed?.metrics?.visual) {
+          const v = completed.metrics.visual;
+          setVisualMetrics({
+            eyeContact: Math.max(0, Math.min(100, Math.round((1 - v.gaze_away) * 100))),
+            posture: Math.max(0, Math.min(100, Math.round((1 - v.head_down) * 100))),
+            composure: Math.max(0, Math.min(100, Math.round((1 - v.freeze_ratio) * 100))),
+            stressScore: Math.max(0, Math.min(100, Math.round(v.stress_score * 100))),
+          });
+        }
+      } catch (cvErr) {
+        console.warn("Impromptu backend attempt CV error:", cvErr);
+      }
+    }
+
+    // 2. Transcribe speech with local Faster-Whisper
     if (payload.audioBlob && payload.audioBlob.size > 200) {
       try {
         const langCode = selectedLanguage.toLowerCase().slice(0, 2);
@@ -153,17 +185,13 @@ export default function ImpromptuPage() {
   }
 
   async function onSpeechAnalyzed() {
-    const finalTranscript = liveTranscript || transcript;
-    const res = await analyzeImpromptu(config, finalTranscript);
-    if (sttMetrics && sttMetrics.wpm > 0) {
-      res.analysis.initialWpm = Math.round(sttMetrics.wpm);
-      res.analysis.finalWpm = Math.round(sttMetrics.wpm * 0.95);
-      res.analysis.fillerCount = Math.round((sttMetrics.filler_rate / 100) * (finalTranscript.split(/\s+/).length || 20));
-      res.analysis.codeSwitchingDetected = sttMetrics.code_switch_rate > 0.15;
-    }
+    const finalTranscript = hasRecorded ? liveTranscript : transcript;
+    const res = await analyzeImpromptu(config, finalTranscript, sttMetrics, visualMetrics);
     setAnalysisResult(res.analysis);
     setDiagnosisResult(res.diagnosis);
     setChallengeResult(res.challenge);
+
+    const pacingDrop = res.analysis.initialWpm - res.analysis.finalWpm;
 
     await saveGenericSession({
       sessionId: sessionId || undefined,
@@ -172,8 +200,8 @@ export default function ImpromptuPage() {
       language: selectedLanguage,
       difficulty: selectedDifficulty,
       overallScore: res.analysis.overallScore,
-      scoreDelta: 12,
-      primaryWeakness: "Lexical repetition after 30s",
+      scoreDelta: Math.abs(pacingDrop),
+      primaryWeakness: pacingDrop > 20 ? "Lexical repetition and pacing decay" : "Spontaneous idea structuring",
       diagnosis: res.diagnosis,
       transcript: finalTranscript,
       metrics: res.analysis,

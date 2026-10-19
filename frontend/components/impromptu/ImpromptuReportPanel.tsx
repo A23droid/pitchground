@@ -166,6 +166,56 @@ export function ImpromptuReportPanel({
         </div>
       </div>
 
+      {/* Computer Vision & Non-Verbal Signals (Dynamic CV Model) */}
+      {analysis.visualMetrics && (
+        <Card className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              <span className="h-2 w-2 rounded-full bg-lavender-ink animate-pulse" />
+              Computer Vision & Physical Composure
+            </span>
+            <Badge
+              variant={
+                analysis.visualMetrics.stressScore <= 30
+                  ? "teal"
+                  : analysis.visualMetrics.stressScore <= 60
+                  ? "amber"
+                  : "rose"
+              }
+              size="sm"
+            >
+              {analysis.visualMetrics.stressScore <= 30
+                ? "Relaxed Delivery"
+                : analysis.visualMetrics.stressScore <= 60
+                ? "Moderate Stress"
+                : "High Physical Stress"} ({analysis.visualMetrics.stressScore}%)
+            </Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Camera Eye Contact</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.eyeContact}%</p>
+              <p className="text-[10px] text-ink-soft">Direct lens engagement</p>
+            </div>
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Posture Alignment</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.posture}%</p>
+              <p className="text-[10px] text-ink-soft">Upright head position</p>
+            </div>
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Active Composure</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-ink">{analysis.visualMetrics.composure}%</p>
+              <p className="text-[10px] text-ink-soft">Low physical freeze</p>
+            </div>
+            <div className="rounded-xl border border-line bg-paper-raised p-3">
+              <span className="text-[11px] text-muted">Stress Index</span>
+              <p className="mt-0.5 font-display text-xl font-bold text-amber-ink">{analysis.visualMetrics.stressScore}%</p>
+              <p className="text-[10px] text-ink-soft">Optical motion stability</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Diagnosis Panel */}
       <DiagnosisPanel diagnosis={diagnosis} />
 

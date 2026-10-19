@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.rest import attempts, learners, sessions, stt
+from app.api.rest import attempts, debate, learners, sessions, stt
 from app.api.ws import sessions as ws_sessions
 from app.auth import router as auth_router
 from app.config import CORS_ORIGINS, ensure_data_dirs
@@ -48,6 +48,7 @@ app.include_router(sessions.router)
 app.include_router(attempts.router)
 app.include_router(ws_sessions.router)
 app.include_router(stt.router)
+app.include_router(debate.router)
 
 
 @app.get("/health")

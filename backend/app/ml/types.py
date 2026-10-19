@@ -48,43 +48,44 @@ class AnalysisConfig(BaseModel):
     question_key_points: list[str] = Field(default_factory=list)
     sample_fps: float = 5
     skip_vision: bool = True
-    role: Literal["baseline", "pressure", "retry"] = "baseline"
+    role: str = "baseline"
 
 
 class AcousticSignals(BaseModel):
-    wpm: float = 120
-    pause_ratio: float = 0.15
-    filler_rate: float = 2.0
-    pitch_var: float | None = 12.0
-    energy_var: float = 0.2
-    silence_burst_count: int = 1
+    wpm: float = 0.0
+    pause_ratio: float = 0.0
+    filler_rate: float = 0.0
+    pitch_var: float | None = None
+    energy_var: float = 0.0
+    silence_burst_count: int = 0
 
 
 class LanguageSignals(BaseModel):
     primary: str = "en"
-    primary_ratio: float = 0.9
-    code_switch_rate: float = 0.1
+    primary_ratio: float = 1.0
+    code_switch_rate: float = 0.0
 
 
 class VisualSignals(BaseModel):
-    gaze_away: float = 0.1
-    head_down: float = 0.1
-    freeze_ratio: float = 0.05
-    gesture_energy: float = 0.4
+    gaze_away: float = 0.0
+    head_down: float = 0.0
+    freeze_ratio: float = 0.0
+    gesture_energy: float = 0.0
+    stress_score: float = 0.0
 
 
 class ContentSignals(BaseModel):
-    coverage: float = 0.7
-    specificity: float = 0.6
+    coverage: float = 0.0
+    specificity: float = 0.0
 
 
 class FusedDimensions(BaseModel):
-    fluency: float = 0.7
-    composure: float = 0.7
-    presence: float = 0.7
-    structure: float = 0.7
-    language_stability: float = 0.8
-    content: float = 0.7
+    fluency: float = 0.0
+    composure: float = 0.0
+    presence: float = 0.0
+    structure: float = 0.0
+    language_stability: float = 0.0
+    content: float = 0.0
 
 
 class QualityFlags(BaseModel):

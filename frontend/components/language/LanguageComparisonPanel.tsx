@@ -15,9 +15,18 @@ function Column({ title, language, analysis }: { title: string; language: Langua
     { label: "Communication (structure)", value: analysis.communication.structure },
     { label: "Fluency", value: analysis.communication.fluency },
   ];
+  if (analysis.visual && analysis.visual.gaze > 0) {
+    rows.push({ label: "Eye Contact Engagement", value: analysis.visual.eyeContactScore ?? analysis.visual.gaze });
+    rows.push({ label: "Posture Steadiness", value: analysis.visual.posture });
+  }
   return (
     <div className="flex-1">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{title}</p>
+      <div className="flex items-center justify-between">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{title}</p>
+        {analysis.visual?.stressScore !== undefined && analysis.visual.stressScore > 0 && (
+          <span className="text-[11px] font-mono text-muted">Stress: {analysis.visual.stressScore}%</span>
+        )}
+      </div>
       <p className="mb-4 font-display text-lg text-ink">{language}</p>
       <div className="flex flex-col gap-3.5">
         {rows.map((r) => (

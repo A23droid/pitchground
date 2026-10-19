@@ -17,9 +17,16 @@ import { languages, difficulties } from "@/mock/scenarios";
 import {
   analyzeDebate,
   DEBATE_ANALYSIS_STAGES,
+  generateAiOpponentTurn,
 } from "@/services/debateService";
 import { saveGenericSession } from "@/services/learnerService";
-import { createSession } from "@/services/sessionService";
+import {
+  createSession,
+  createAttempt,
+  uploadAttemptMedia,
+  completeAttempt,
+  waitForAttemptComplete,
+} from "@/services/sessionService";
 import { transcribeAudioBlob } from "@/services/sttService";
 import { cn } from "@/lib/utils";
 
@@ -141,6 +148,8 @@ export default function DebateArenaPage() {
     aiCounter2?: string;
     userClosing?: string;
   }>({});
+  const userOpeningVisualRef = useRef<any>(null);
+  const userRebuttalVisualRef = useRef<any>(null);
 
   // Camera & Media stream
   const mobileVideoRef = useRef<HTMLVideoElement>(null);
@@ -258,22 +267,45 @@ export default function DebateArenaPage() {
   useEffect(() => {
     if (pageMode !== "arena" || !isAiTurn) return;
 
+    let cancelled = false;
     setIsAiSpeaking(true);
-    setAiTypedTranscript("");
+    setAiTypedTranscript("Formulating dynamic counter-argument...");
 
-    const targetAiText = currentTurn === "ai-counter-1" ? script.aiCounter : script.aiCounter2;
+    const turnNum = currentTurn === "ai-counter-1" ? 1 : 2;
+    const userSpeech = currentTurn === "ai-counter-1"
+      ? (debateHistory.userOpening || userTypedTranscript)
+      : (debateHistory.userRebuttal || userTypedTranscript);
 
-    let i = 0;
-    const interval = setInterval(() => {
-      i += 3;
-      setAiTypedTranscript(targetAiText.slice(0, i));
-      if (i >= targetAiText.length) {
-        clearInterval(interval);
+    generateAiOpponentTurn(selectedTopic.id, config, turnNum, userSpeech)
+      .then(({ counterArgumentText }) => {
+        if (cancelled) return;
+        const targetAiText = counterArgumentText || (currentTurn === "ai-counter-1" ? script.aiCounter : script.aiCounter2);
+        let i = 0;
+        setAiTypedTranscript("");
+        const interval = setInterval(() => {
+          if (cancelled) {
+            clearInterval(interval);
+            return;
+          }
+          i += 3;
+          setAiTypedTranscript(targetAiText.slice(0, i));
+          if (i >= targetAiText.length) {
+            clearInterval(interval);
+            setIsAiSpeaking(false);
+          }
+        }, 18);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("AI counter generation error, falling back to script:", err);
+        const targetAiText = currentTurn === "ai-counter-1" ? script.aiCounter : script.aiCounter2;
+        setAiTypedTranscript(targetAiText);
         setIsAiSpeaking(false);
-      }
-    }, 18);
+      });
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageMode, currentTurn]);
 
@@ -297,6 +329,8 @@ export default function DebateArenaPage() {
     setUserTypedTranscript("");
     setAiTypedTranscript("");
     setDebateHistory({});
+    userOpeningVisualRef.current = null;
+    userRebuttalVisualRef.current = null;
     try {
       const sess = await createSession({
         mode: "debate",
@@ -327,7 +361,29 @@ export default function DebateArenaPage() {
           const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
           if (blob.size > 200) {
             setIsTranscribing(true);
-            setUserTypedTranscript("Transcribing with local Faster-Whisper...");
+            setUserTypedTranscript("Transcribing audio and running computer vision analysis...");
+
+            // 1. Send to backend attempt for real OpenCV visual extraction & audio analysis
+            if (sessionId) {
+              try {
+                const turnRole = currentTurn === "user-opening" ? "opening" : currentTurn === "user-rebuttal" ? "rebuttal" : "closing";
+                const attempt = await createAttempt(sessionId, turnRole);
+                await uploadAttemptMedia(sessionId, attempt.id, blob, blob);
+                await completeAttempt(sessionId, attempt.id);
+                const completed = await waitForAttemptComplete(sessionId, attempt.id, 25000);
+                if (completed?.metrics?.visual) {
+                  if (currentTurn === "user-opening") {
+                    userOpeningVisualRef.current = completed.metrics.visual;
+                  } else if (currentTurn === "user-rebuttal") {
+                    userRebuttalVisualRef.current = completed.metrics.visual;
+                  }
+                }
+              } catch (mediaErr) {
+                console.warn("Backend debate attempt media error:", mediaErr);
+              }
+            }
+
+            // 2. Real Faster-Whisper transcription
             try {
               const langCode = selectedLanguage === "Malayalam" ? "ml" : selectedLanguage === "Hindi" ? "hi" : "auto";
               const result = await transcribeAudioBlob(blob, langCode);
@@ -384,14 +440,14 @@ export default function DebateArenaPage() {
 
   function advanceFromAiTurn() {
     if (currentTurn === "ai-counter-1") {
-      setDebateHistory((prev) => ({ ...prev, aiCounter1: script.aiCounter }));
+      setDebateHistory((prev) => ({ ...prev, aiCounter1: aiTypedTranscript || script.aiCounter }));
       // Pass turn control to LEFT (User)
       setCurrentTurn("user-rebuttal");
       setUserSpeechPhase("ready");
       setSecondsLeft(30);
       setUserTypedTranscript("");
     } else if (currentTurn === "ai-counter-2") {
-      setDebateHistory((prev) => ({ ...prev, aiCounter2: script.aiCounter2 }));
+      setDebateHistory((prev) => ({ ...prev, aiCounter2: aiTypedTranscript || script.aiCounter2 }));
       // Pass turn control to LEFT (User)
       setCurrentTurn("user-closing");
       setUserSpeechPhase("ready");
@@ -405,19 +461,27 @@ export default function DebateArenaPage() {
   }
 
   async function onAnalysisDone() {
-    const sampleRounds: DebateRoundData[] = [
-      { round: 1, userTranscript: script.userOpening, timeLimitSeconds: 60 },
+    const userRounds: DebateRoundData[] = [
+      {
+        round: 1,
+        userTranscript: debateHistory.userOpening || script.userOpening,
+        timeLimitSeconds: 60,
+        visualMetrics: userOpeningVisualRef.current || undefined,
+      },
       {
         round: 2,
-        userTranscript: script.userRebuttal,
-        aiCounterTranscript: script.aiCounter,
+        userTranscript: debateHistory.userRebuttal || script.userRebuttal,
+        aiCounterTranscript: debateHistory.aiCounter1 || script.aiCounter,
         timeLimitSeconds: 30,
+        visualMetrics: userRebuttalVisualRef.current || undefined,
       },
     ];
-    const res = await analyzeDebate(config, sampleRounds);
+    const res = await analyzeDebate(config, userRounds);
     setAnalysisResult(res.analysis);
     setDiagnosisResult(res.diagnosis);
     setChallengeResult(res.challenge);
+
+    const delta = res.analysis.openingScore - res.analysis.rebuttalScore;
 
     await saveGenericSession({
       sessionId: sessionId || undefined,
@@ -427,10 +491,10 @@ export default function DebateArenaPage() {
       language: selectedLanguage,
       difficulty: selectedDifficulty,
       overallScore: res.analysis.overallScore,
-      scoreDelta: 18,
-      primaryWeakness: "Rebuttal under counter-pressure",
+      scoreDelta: Math.abs(delta),
+      primaryWeakness: delta > 10 ? "Rebuttal under counter-pressure" : "Premise refutation precision",
       diagnosis: res.diagnosis,
-      transcript: [script.userOpening, script.userRebuttal, script.userClosing].filter(Boolean).join(" "),
+      transcript: [debateHistory.userOpening || script.userOpening, debateHistory.userRebuttal || script.userRebuttal, debateHistory.userClosing || script.userClosing].filter(Boolean).join(" "),
       metrics: res.analysis,
     });
 

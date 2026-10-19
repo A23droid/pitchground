@@ -177,4 +177,5 @@ class VisionExtractor:
             head_down=head_down,
             freeze_ratio=freeze_ratio,
             gesture_energy=gesture_energy,
+            stress_score=round(stress_score / 100.0, 3),
         ), stress_score

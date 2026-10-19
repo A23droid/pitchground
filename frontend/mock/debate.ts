@@ -177,21 +177,103 @@ export function getDebateScript(topicId: string, language: Language): Multilingu
   return langTable[topicId] ?? langTable.default;
 }
 
-export function generateDebateAnalysis(config: DebateConfig): DebateAnalysis {
+export function generateDebateAnalysis(config: DebateConfig, rounds?: DebateRoundData[]): DebateAnalysis {
   const isMultilingual = config.language !== "English";
+  const openingText = rounds?.find((r) => r.round === 1)?.userTranscript || "";
+  const rebuttalText = rounds?.find((r) => r.round === 2)?.userTranscript || "";
+  const aiCounter = rounds?.find((r) => r.round === 2)?.aiCounterTranscript || "";
+
+  // 1. Opening argument scoring (depth, thesis grounding, causal tokens)
+  const openWords = openingText.trim().split(/\s+/).filter(Boolean);
+  const openWordCount = openWords.length;
+  const causalRegex = /\b(because|therefore|leads to|results in|proves|evidence|fundamental|specifically|architecture|impact|scale|ensures|leverage)\b/gi;
+  const causalHits = (openingText.match(causalRegex) || []).length;
+  const openingDepthScore = Math.min(45, openWordCount * 0.6);
+  const openingLogicScore = Math.min(35, causalHits * 7);
+  const openingScore = openWordCount > 0 ? Math.min(100, Math.max(15, Math.round(openingDepthScore + openingLogicScore + 15))) : 0;
+
+  // 2. Rebuttal argument scoring (counter-premise refutation, contrast tokens, direct address)
+  const rebutWords = rebuttalText.trim().split(/\s+/).filter(Boolean);
+  const rebutWordCount = rebutWords.length;
+  const refutationRegex = /\b(however|contrary|flaw|misunderstands|overlooks|while|instead|mitigate|safeguard|tradeoff|actually|verify|boundary|isolate)\b/gi;
+  const refutationHits = (rebuttalText.match(refutationRegex) || []).length;
+
+  // Check overlap against AI counter premise
+  const aiTokens = new Set(aiCounter.toLowerCase().split(/\s+/).filter((w) => w.length > 4));
+  let premiseOverlap = 0;
+  for (const w of rebutWords) {
+    if (aiTokens.has(w.toLowerCase())) premiseOverlap++;
+  }
+  const rebuttalDepthScore = Math.min(40, rebutWordCount * 0.7);
+  const rebuttalRefuteScore = Math.min(35, refutationHits * 9);
+  const rebuttalTargetScore = Math.min(25, premiseOverlap * 6);
+  const rebuttalScore = rebutWordCount > 0 ? Math.min(100, Math.max(15, Math.round(rebuttalDepthScore + rebuttalRefuteScore + rebuttalTargetScore))) : 0;
+
+  // 3. Composite dimensions
+  const argumentation = Math.round(openingScore * 0.55 + rebuttalScore * 0.45);
+  const rebuttal = rebuttalScore;
+
+  // 4. Communication: vocabulary diversity across all user speeches
+  const allWords = [...openWords, ...rebutWords];
+  const uniqueWords = new Set(allWords.map((w) => w.toLowerCase()));
+  const typeTokenRatio = allWords.length > 0 ? uniqueWords.size / allWords.length : 0.0;
+  const communication = allWords.length > 0 ? Math.min(100, Math.max(15, Math.round(typeTokenRatio * 55 + Math.min(45, allWords.length * 0.35)))) : 0;
+
+  // 5. Pressure handling: retention of fluency between opening and rebuttal
+  const fluencyDelta = openingScore - rebuttalScore;
+  const pressureHandling = (openWordCount > 0 && rebutWordCount > 0)
+    ? Math.min(100, Math.max(20, Math.round(100 - Math.max(0, fluencyDelta) * 1.3)))
+    : (openWordCount > 0 ? 50 : 0);
+
+  // 6. Language fidelity & code-switching
+  const allText = `${openingText} ${rebuttalText}`;
+  const latinCount = (allText.match(/[a-zA-Z]/g) || []).length;
+  const indicCount = (allText.match(/[\u0900-\u0D7F]/g) || []).length;
+  const totalChars = Math.max(1, latinCount + indicCount);
+  const codeSwitchingRatio = isMultilingual ? Math.min(100, Math.round((latinCount / totalChars) * 100)) : 0;
+  const languageFidelity = isMultilingual ? (totalChars > 1 ? Math.min(100, Math.max(10, Math.round((indicCount / totalChars) * 100))) : 0) : 100;
+
+  // 7. Visual presence from real CV Model (if video was captured)
+  const roundVisuals = rounds?.map((r) => r.visualMetrics).filter(Boolean) || [];
+  let visualPresence: DebateAnalysis["visualPresence"] = undefined;
+  if (roundVisuals.length > 0) {
+    const avgGazeAway = roundVisuals.reduce((acc, v) => acc + (v?.gaze_away ?? 0), 0) / roundVisuals.length;
+    const avgHeadDown = roundVisuals.reduce((acc, v) => acc + (v?.head_down ?? 0), 0) / roundVisuals.length;
+    const avgFreeze = roundVisuals.reduce((acc, v) => acc + (v?.freeze_ratio ?? 0), 0) / roundVisuals.length;
+    const avgStress = roundVisuals.reduce((acc, v) => acc + (v?.stress_score ?? 0), 0) / roundVisuals.length;
+    visualPresence = {
+      eyeContact: Math.max(0, Math.min(100, Math.round((1 - avgGazeAway) * 100))),
+      posture: Math.max(0, Math.min(100, Math.round((1 - avgHeadDown) * 100))),
+      composure: Math.max(0, Math.min(100, Math.round((1 - avgFreeze) * 100))),
+      stressLevel: Math.max(0, Math.min(100, Math.round(avgStress * 100))),
+    };
+  }
+
+  // 8. Overall score with visual presence integration
+  const visualScore = visualPresence ? Math.round((visualPresence.eyeContact + visualPresence.posture + visualPresence.composure) / 3) : null;
+  const overallScore = (openWordCount > 0 || rebutWordCount > 0)
+    ? visualScore !== null
+      ? Math.round(0.25 * argumentation + 0.25 * rebuttal + 0.20 * communication + 0.15 * pressureHandling + 0.15 * visualScore)
+      : Math.round(0.30 * argumentation + 0.30 * rebuttal + 0.20 * communication + 0.20 * pressureHandling)
+    : 0;
+
+  const keyObservation =
+    rebuttalScore >= openingScore - 8
+      ? "Strong debate performance with agile counter-argument refutation and resilient vocal conviction under timer pressure."
+      : "Persuasive opening premise; however, under direct AI counter-pressure, the rebuttal retreated to defensive generalizations rather than refuting the opposing boundary conditions.";
 
   return {
-    argumentation: 84,
-    rebuttal: 51,
-    communication: 72,
-    pressureHandling: 58,
-    languageFidelity: isMultilingual ? 86 : 82,
-    codeSwitchingRatio: config.language === "Mixed" ? 42 : config.language === "English" ? 0 : 14,
-    overallScore: 66,
-    openingScore: 85,
-    rebuttalScore: 51,
-    keyObservation:
-      "Strong conceptual opening backed by clear rationale; under direct AI counter-pressure, rebuttal reverted to defensive generalizations rather than refuting the opponent's premise.",
+    argumentation,
+    rebuttal,
+    communication,
+    pressureHandling,
+    languageFidelity,
+    codeSwitchingRatio,
+    overallScore,
+    openingScore,
+    rebuttalScore,
+    keyObservation,
+    visualPresence,
   };
 }
 
@@ -199,8 +281,11 @@ export function generateDebateDiagnosis(analysis: DebateAnalysis): FailureDiagno
   const openingRebuttalDelta = analysis.openingScore - analysis.rebuttalScore;
 
   return {
-    headline: "Your opening argument was structured and persuasive, but your rebuttal collapsed under counter-pressure.",
-    explanation: `Your opening score reached ${analysis.openingScore}%, demonstrating strong thesis clarity and framing. However, upon facing the opponent's counterargument, your rebuttal score dropped by ${openingRebuttalDelta} points (${analysis.rebuttalScore}%). Instead of dismantling the counterargument's core premise, your response retreated into general assertions ("developers will just be careful") with high pause latency.`,
+    headline:
+      openingRebuttalDelta > 15
+        ? "Your opening argument was structured and persuasive, but your rebuttal collapsed under counter-pressure."
+        : "Consistent debate delivery with controlled thesis framing across both opening and rebuttal rounds.",
+    explanation: `Your opening score reached ${analysis.openingScore}%, demonstrating thesis clarity and structural framing. In the rebuttal phase against the AI counter-argument, your rebuttal score was ${analysis.rebuttalScore}% (delta: ${openingRebuttalDelta > 0 ? "-" : "+"}${Math.abs(openingRebuttalDelta)} points). Overall argumentation scored ${analysis.argumentation}%, with pressure handling at ${analysis.pressureHandling}%.`,
     deltas: [
       {
         label: "Argumentation clarity",
@@ -211,22 +296,22 @@ export function generateDebateDiagnosis(analysis: DebateAnalysis): FailureDiagno
       },
       {
         label: "Direct premise refutation",
-        before: 82,
-        after: 44,
+        before: analysis.openingScore,
+        after: analysis.rebuttal,
         unit: "%",
         direction: "down-is-bad",
       },
       {
-        label: "Filler word rate",
-        before: 4,
-        after: 16,
-        unit: "count",
-        direction: "up-is-bad",
+        label: "Communication delivery",
+        before: analysis.communication,
+        after: Math.max(30, analysis.communication - Math.max(0, Math.round(openingRebuttalDelta * 0.4))),
+        unit: "%",
+        direction: "down-is-bad",
       },
       {
-        label: "Counter-framing agility",
-        before: 80,
-        after: 50,
+        label: "Pressure handling agility",
+        before: 85,
+        after: analysis.pressureHandling,
         unit: "%",
         direction: "down-is-bad",
       },
