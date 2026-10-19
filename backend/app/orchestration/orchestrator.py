@@ -214,18 +214,21 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
 
         transcriber = get_transcriber()
         analyzer = get_analyzer()
-        transcript = transcriber.transcribe(attempt.audio_path, language_hint="en")
+        lang_hint = "hi" if "hi" in (session.language or "").lower() else ("en" if "en" in (session.language or "").lower() else "auto")
+        transcript = transcriber.transcribe(attempt.audio_path, language_hint=lang_hint)
         if not transcript.text:
             transcript = Transcript(
-                text=attempt.prompt or "No speech detected.",
-                language="en",
-                confidence=None,
+                text="",
+                language=transcript.language or ("hi" if lang_hint == "hi" else "en"),
+                confidence=0.0,
                 segments=[],
+                words=[],
             )
 
         media = AttemptMedia(attempt_id=attempt.id, audio_path=attempt.audio_path, video_path=attempt.video_path)
+        practice_lang = "hi" if "hi" in (session.language or "").lower() else "en"
         config = AnalysisConfig(
-            practice_language="en",
+            practice_language=practice_lang,
             question_key_points=key_points,
             skip_vision=not bool(attempt.video_path),
             role=attempt.role,  # type: ignore[arg-type]
@@ -334,8 +337,11 @@ def run_diagnosis_pipeline(db: Session, session: SessionModel) -> None:
 
     transcript = pressure_a.transcript.text if pressure_a.transcript else ""
     diagnosis = render_diagnosis(candidates, evidence, transcript)
-    item = _bank(db, session.topic, "retry") or _bank(db, session.topic, "pressure")
-    challenge = render_challenge(diagnosis, item.prompt if item else "Retry the same topic under 20 seconds.", "en")
+    challenge = render_challenge(
+        diagnosis,
+        item.prompt if item else "Retry the same topic under 20 seconds.",
+        session.language or "en",
+    )
 
     payload = diagnosis
     if session.diagnosis:

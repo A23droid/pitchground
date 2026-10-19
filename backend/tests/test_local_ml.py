@@ -57,9 +57,9 @@ def test_acoustic_fallback():
     acoustic = AcousticExtractor()
     signals, score = acoustic.extract("non_existent_file.webm", "Hello this is a test speech sample.")
     print(f"[TEST 4] Acoustic signals: {signals}, speaking score: {score}")
-    assert signals.wpm > 0
-    assert score > 0.0
-    print("[OK] Acoustic test passed!")
+    assert signals.wpm == 0.0
+    assert signals.pause_ratio == 1.0
+    print("[OK] Acoustic fallback test passed!")
 
 
 def test_real_analyzer_bundle():

@@ -1,34 +1,20 @@
 from __future__ import annotations
 
-from app.config import ML_ANALYZER
+from app.ml.local_transcriber import LocalWhisperTranscriber
 from app.ml.protocols import AttemptAnalyzerProtocol, TranscriberProtocol
-from app.ml.stub_analyzer import StubAnalyzer
-from app.services.stt_sarvam import SarvamTranscriber
+from app.ml.real_analyzer import RealAnalyzer
 
 
 def get_transcriber() -> TranscriberProtocol:
-    if ML_ANALYZER == "real":
-        try:
-            from app.ml.local_transcriber import LocalWhisperTranscriber  # type: ignore
-
-            return LocalWhisperTranscriber()
-        except Exception:
-            return SarvamTranscriber()
-    return SarvamTranscriber()
-
+    """Returns the local Faster-Whisper transcriber (in-process model, no API keys)."""
+    return LocalWhisperTranscriber()
 
 
 def get_analyzer() -> AttemptAnalyzerProtocol:
-    if ML_ANALYZER == "real":
-        try:
-            from app.ml.real_analyzer import RealAnalyzer  # type: ignore
-
-            return RealAnalyzer()
-        except Exception:
-            return StubAnalyzer()
-    return StubAnalyzer()
+    """Returns the production RealAnalyzer running local Librosa, MediaPipe, and linguistic models."""
+    return RealAnalyzer()
 
 
-# ── Canonical public aliases (preferred over get_* names) ─────────────────
+# ── Canonical public aliases ──────────────────────────────────────────────
 build_transcriber = get_transcriber
 build_analyzer = get_analyzer

@@ -20,33 +20,48 @@ class ContentEvaluator:
         return self._model if self._model is not False else None
 
     def evaluate(self, transcript_text: str, key_points: list[str]) -> ContentSignals:
-        if not key_points or not transcript_text.strip():
-            return ContentSignals(coverage=0.70, specificity=0.60)
+        text = transcript_text.strip()
+        if not text:
+            return ContentSignals(coverage=0.0, specificity=0.0)
+
+        # 1. Lexical Specificity (Technical terms, metrics, numbers, precision tokens)
+        words = re.findall(r"\b\w+\b", text.lower())
+        unique_words = len(set(words))
+        type_token_ratio = unique_words / max(1, len(words))
+        numbers_count = len(re.findall(r"\b\d+\b", text))
+        technical_acronyms = len(re.findall(r"\b[A-Z]{2,}\b", transcript_text))
+        
+        # Specificity score based on vocabulary diversity and quantitative/technical grounding
+        specificity = min(1.0, (type_token_ratio * 0.5) + (min(numbers_count, 5) * 0.06) + (min(technical_acronyms, 4) * 0.05))
+        specificity = round(max(0.10, specificity), 2)
+
+        # If no key points were provided to check against
+        if not key_points:
+            coverage = round(min(1.0, len(words) / 60.0), 2)  # depth based on substantive answer
+            return ContentSignals(coverage=coverage, specificity=specificity)
 
         model = self._get_model()
 
         if model is None:
             # Token and n-gram overlap heuristic
-            text_lower = transcript_text.lower()
-            words = set(re.findall(r"\b\w+\b", text_lower))
+            text_lower = text.lower()
+            word_set = set(words)
             hits = 0
             for kp in key_points:
                 kp_words = set(re.findall(r"\b\w+\b", kp.lower()))
                 if not kp_words:
                     continue
-                overlap = len(kp_words & words) / len(kp_words)
+                overlap = len(kp_words & word_set) / len(kp_words)
                 if overlap >= 0.40 or kp.lower() in text_lower:
                     hits += 1
             coverage = round(hits / max(1, len(key_points)), 2)
-            numbers_count = len(re.findall(r"\b\d+\b", transcript_text))
-            specificity = min(1.0, 0.45 + (numbers_count * 0.08))
-            return ContentSignals(coverage=coverage, specificity=round(specificity, 2))
+            return ContentSignals(coverage=coverage, specificity=specificity)
 
         # Semantic embedding cosine similarity
         import numpy as np
-        sentences = [s.strip() for s in re.split(r"[.!?\n]", transcript_text) if len(s.strip()) > 8]
+        sentences = [s.strip() for s in re.split(r"[.!?\n]", text) if len(s.strip()) > 8]
         if not sentences:
-            return ContentSignals(coverage=0.35, specificity=0.40)
+            return ContentSignals(coverage=0.0, specificity=specificity)
 
         sent_embs = model.encode(sentences, normalize_embeddings=True)
         kp_embs = model.encode(key_points, normalize_embeddings=True)
@@ -55,7 +70,4 @@ class ContentEvaluator:
         hits = int(np.sum(np.max(sim_matrix, axis=1) >= 0.60))
         coverage = round(float(hits / max(1, len(key_points))), 2)
 
-        numbers_count = len(re.findall(r"\b\d+\b", transcript_text))
-        specificity = min(1.0, 0.45 + (numbers_count * 0.08))
-
-        return ContentSignals(coverage=coverage, specificity=round(specificity, 2))
+        return ContentSignals(coverage=coverage, specificity=specificity)

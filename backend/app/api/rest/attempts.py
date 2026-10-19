@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_learner
-from app.models import Attempt, Learner, Session as SessionModel
+from app.models import Attempt, EvidenceRow, Learner, Session as SessionModel
 from app.orchestration.orchestrator import analyze_attempt_job, create_attempt
 from app.schemas.api import AttemptCreate
 from app.storage.media import save_upload
@@ -118,6 +118,24 @@ def get_attempt(
     attempt = db.get(Attempt, attempt_id)
     if not attempt or attempt.session_id != session.id:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    evidence_rows = db.query(EvidenceRow).filter(EvidenceRow.attempt_id == attempt.id).all()
+    evidence_list = []
+    for e in evidence_rows:
+        try:
+            if e.payload_json and e.payload_json != "{}":
+                evidence_list.append(json.loads(e.payload_json))
+            else:
+                evidence_list.append({
+                    "id": e.id,
+                    "metric": e.metric,
+                    "delta": float(e.delta or 0),
+                    "threshold": float(e.threshold or 0),
+                    "modality": e.modality,
+                    "excerpt": e.excerpt,
+                })
+        except Exception:
+            pass
+
     return {
         "id": attempt.id,
         "role": attempt.role,
@@ -130,6 +148,6 @@ def get_attempt(
         if attempt.transcript
         else None,
         "metrics": json.loads(attempt.metrics.signal_bundle_json) if attempt.metrics else None,
-        "evidence": [],
+        "evidence": evidence_list,
         "analysis_status": attempt.analysis_status,
     }
