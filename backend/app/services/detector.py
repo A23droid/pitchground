@@ -80,6 +80,24 @@ def detect(baseline: SignalBundle, observed: SignalBundle) -> tuple[list[Evidenc
         )
         fired_for["freeze"].append(eid)
 
+    if observed.visual and (observed.visual.gaze_away > 0.35 or observed.visual.head_down > 0.35):
+        eid = str(uuid.uuid4())
+        metric_name = "visual.gaze_away" if observed.visual.gaze_away >= observed.visual.head_down else "visual.head_down"
+        delta_val = observed.visual.gaze_away if metric_name == "visual.gaze_away" else observed.visual.head_down
+        evidence.append(
+            Evidence(
+                id=eid,
+                attempt_id=observed.attempt_id,
+                metric=metric_name,
+                delta=delta_val,
+                threshold=0.35,
+                modality="visual",
+                excerpt=None,
+                span=None,
+            )
+        )
+        fired_for["delivery_collapse"].append(eid)
+
     candidates: list[CandidateFailure] = []
     for condition, ids in fired_for.items():
         if not ids:

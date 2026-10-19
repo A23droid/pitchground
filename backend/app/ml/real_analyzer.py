@@ -95,12 +95,14 @@ class RealAnalyzer(AttemptAnalyzerProtocol):
         )
 
         # Composure: Vocal stability (low energy & pitch jitter) + physical composure (no freeze panic)
-        freeze_val = visual_signals.freeze_ratio if visual_signals else 0.05
-        composure = round(
-            0.50 * max(0.0, 1.0 - min(1.0, acoustic_signals.energy_var * 2.0))
-            + 0.50 * (1.0 - freeze_val),
-            2,
-        )
+        vocal_stability = max(0.0, 1.0 - min(1.0, acoustic_signals.energy_var * 2.0))
+        if visual_signals:
+            composure = round(
+                0.50 * vocal_stability + 0.50 * (1.0 - visual_signals.freeze_ratio),
+                2,
+            )
+        else:
+            composure = round(vocal_stability, 2)
 
         # Presence: Camera eye contact + expressive hand gestures (or vocal delivery confidence if audio-only)
         if visual_signals:
