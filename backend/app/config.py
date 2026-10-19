@@ -5,9 +5,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 DATA_DIR = BASE_DIR / "data"
 MEDIA_DIR = DATA_DIR / "media"
 DB_PATH = DATA_DIR / "pitchground.db"
@@ -40,7 +39,7 @@ SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "openai/gpt-oss-120b")
-ML_ANALYZER = os.getenv("ML_ANALYZER", "real")  # real | stub
+ML_ANALYZER = os.getenv("ML_ANALYZER", "real")  # compatibility setting; production factory always uses real analysis
 
 # local | nhost
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
@@ -53,7 +52,7 @@ CORS_ORIGINS = [
     o.strip()
     for o in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,https://pitch-ground.vercel.app",
+        "http://localhost:3000,http://127.0.0.1:3000,https://pitch-ground.vercel.app",
     ).split(",")
     if o.strip()
 ]

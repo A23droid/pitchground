@@ -9,9 +9,10 @@ from urllib.parse import urlencode
 import httpx
 import jwt
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.db import get_db
 from app.email_service import send_password_reset_email
@@ -30,7 +31,7 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
-_oauth_states: dict[str, str] = {}
+OAUTH_STATE_COOKIE = "pitchground_oauth_state"
 
 
 def _settings() -> dict[str, str]:
@@ -66,6 +67,8 @@ def _issue_token(name: str, email: str, sub: str | None = None) -> str:
 
 def create_access_token(data: dict) -> str:
     secret = os.getenv("JWT_SECRET", "")
+    if not secret:
+        raise HTTPException(status_code=503, detail="Sign-in is not configured.")
     to_encode = data.copy()
     expire = int(time.time()) + 60 * 60 * 24 * 7
     to_encode.update({"exp": expire})
@@ -73,7 +76,8 @@ def create_access_token(data: dict) -> str:
 
 
 def _upsert_learner(db: Session, email: str, name: str, google_sub: str | None = None) -> Learner:
-    learner = db.query(Learner).filter(Learner.email == email).one_or_none()
+    email = email.strip().lower()
+    learner = db.query(Learner).filter(func.lower(Learner.email) == email).one_or_none()
     if learner is None:
         learner = Learner(email=email, display_name=name, practice_language="en", google_sub=google_sub)
         db.add(learner)
@@ -105,17 +109,17 @@ def decode_user(token: str) -> dict[str, str]:
 if HAS_USER_AUTH:
     @router.post("/signup")
     def signup(user_in: UserCreate, db: Session = Depends(get_db)):
-        user = db.query(User).filter(User.email == user_in.email).first()
+        user = db.query(User).filter(func.lower(User.email) == str(user_in.email).lower()).first()
         if user:
             raise HTTPException(status_code=400, detail="Email already registered")
         hashed_password = get_password_hash(user_in.password)
         db_user = User(
-            email=user_in.email,
+            email=str(user_in.email).lower(),
             name=user_in.name,
             hashed_password=hashed_password,
         )
         db.add(db_user)
-        _upsert_learner(db, email=user_in.email, name=user_in.name or user_in.email.split("@")[0])
+        _upsert_learner(db, email=str(user_in.email).lower(), name=user_in.name or user_in.email.split("@")[0])
         db.commit()
         db.refresh(db_user)
         token = _issue_token(name=db_user.name or db_user.email.split("@")[0], email=db_user.email)
@@ -123,7 +127,7 @@ if HAS_USER_AUTH:
 
     @router.post("/login")
     def login(user_in: UserLogin, db: Session = Depends(get_db)):
-        user = db.query(User).filter(User.email == user_in.email).first()
+        user = db.query(User).filter(func.lower(User.email) == str(user_in.email).lower()).first()
         if not user or not verify_password(user_in.password, user.hashed_password):
             raise HTTPException(status_code=401, detail="Incorrect email or password")
         _upsert_learner(db, email=user.email, name=user.name or user.email.split("@")[0])
@@ -160,8 +164,10 @@ if HAS_USER_AUTH:
 @router.get("/google")
 def google_start(next: str = Query("/dashboard")):
     cfg = _settings()
-    state = secrets.token_urlsafe(24)
-    _oauth_states[state] = next if next.startswith("/") else "/dashboard"
+    nonce = secrets.token_urlsafe(24)
+    state = jwt.encode({"purpose":"google_oauth_state","nonce":nonce,
+                        "next":next if next.startswith("/") and not next.startswith("//") else "/dashboard",
+                        "exp":int(time.time())+600},cfg["jwt_secret"],algorithm="HS256")
     params = {
         "client_id": cfg["client_id"],
         "redirect_uri": f"{cfg['backend']}/auth/google/callback",
@@ -170,11 +176,14 @@ def google_start(next: str = Query("/dashboard")):
         "state": state,
         "prompt": "select_account",
     }
-    return RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
+    response=RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}")
+    response.set_cookie(OAUTH_STATE_COOKIE,nonce,max_age=600,httponly=True,secure=cfg["backend"].startswith("https://"),samesite="lax",path="/auth/google/callback")
+    return response
 
 
 @router.get("/google/callback")
 def google_callback(
+    request: Request,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -182,10 +191,16 @@ def google_callback(
 ):
     cfg = _settings()
     frontend = cfg["frontend"]
-    if error or not code or not state or state not in _oauth_states:
+    if error or not code or not state:
         return RedirectResponse(f"{frontend}/login?error=google")
-
-    next_path = _oauth_states.pop(state)
+    try:
+        payload=jwt.decode(state,cfg["jwt_secret"],algorithms=["HS256"])
+        nonce=request.cookies.get(OAUTH_STATE_COOKIE,"")
+        if payload.get("purpose")!="google_oauth_state" or not nonce or not secrets.compare_digest(nonce,str(payload.get("nonce",""))):
+            raise ValueError("Invalid OAuth state")
+        next_path=payload.get("next","/dashboard")
+    except (jwt.PyJWTError,ValueError):
+        return RedirectResponse(f"{frontend}/login?error=google")
 
     token_res = httpx.post(
         GOOGLE_TOKEN_URL,
@@ -223,7 +238,9 @@ def google_callback(
     _upsert_learner(db, email=email, name=name, google_sub=str(google_sub) if google_sub else None)
     token = _issue_token(name=name, email=email, sub=str(google_sub) if google_sub else None)
     params = urlencode({"token": token, "next": next_path})
-    return RedirectResponse(f"{frontend}/auth/callback?{params}")
+    response=RedirectResponse(f"{frontend}/auth/callback?{params}")
+    response.delete_cookie(OAUTH_STATE_COOKIE,path="/auth/google/callback")
+    return response
 
 
 @router.post("/demo")
@@ -231,8 +248,8 @@ def demo_login(db: Session = Depends(get_db)):
     """Local/demo JWT so the interview loop works without Google."""
     if os.getenv("DEMO_AUTH", "1") not in ("1", "true", "TRUE", "yes"):
         raise HTTPException(status_code=403, detail="Demo auth disabled.")
-    email = "demo@pitchground.ai"
-    name = "Demo User"
+    email = f"guest-{secrets.token_hex(16)}@practice.invalid"
+    name = "Guest learner"
     learner = _upsert_learner(db, email=email, name=name)
     token = _issue_token(name=name, email=email, sub=f"demo:{learner.id}")
     return {"token": token, "name": name, "email": email, "learner_id": learner.id}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,16 +13,13 @@ import { RecordingPanel, type RecordingSubmitPayload } from "@/components/interv
 import { AnalyzingState } from "@/components/interview/AnalyzingState";
 import { PrepCountdown } from "@/components/impromptu/PrepCountdown";
 import { ImpromptuReportPanel } from "@/components/impromptu/ImpromptuReportPanel";
-import { IMPROMPTU_TOPICS, getImpromptuTranscript } from "@/mock/impromptu";
-import { languages, difficulties } from "@/mock/scenarios";
-import {
-  analyzeImpromptu,
-  getRandomImpromptuTopic,
-  IMPROMPTU_ANALYSIS_STAGES,
-} from "@/services/impromptuService";
+import { analyzeRecording, getPracticeReport, languageCode } from "@/services/practiceService";
+import { languages, difficulties } from "@/lib/practiceOptions";
+const IMPROMPTU_ANALYSIS_STAGES = ["Analyzing recorded speech...", "Reviewing your answer...", "Preparing coaching..."];
 import { saveGenericSession } from "@/services/learnerService";
-import { createSession } from "@/services/sessionService";
-import { transcribeAudioBlob } from "@/services/sttService";
+import {
+  createSession,
+} from "@/services/sessionService";
 import type {
   Difficulty,
   FailureDiagnosis,
@@ -68,9 +65,14 @@ export default function ImpromptuPage() {
   const router = useRouter();
 
   // Setup state
-  const [selectedTopic, setSelectedTopic] = useState<ImpromptuTopic>(IMPROMPTU_TOPICS[0]);
+  const [selectedTopic, setSelectedTopic] = useState<ImpromptuTopic>({ id: "custom", prompt: "", category: "Spontaneous Thought", hint: "" });
   const [customPrompt, setCustomPrompt] = useState("");
-  const [isCustom, setIsCustom] = useState(false);
+  const [isCustom, setIsCustom] = useState(true);
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const [pendingMedia, setPendingMedia] = useState<RecordingSubmitPayload | null>(null);
+  const [isRetry, setIsRetry] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   const [selectedDuration, setSelectedDuration] = useState<ImpromptuDuration>(60);
   const [selectedLanguage, setSelectedLanguage] = useState<Language>("English");
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>("Standard");
@@ -98,90 +100,49 @@ export default function ImpromptuPage() {
     difficulty: selectedDifficulty,
   };
 
-  const transcript = getImpromptuTranscript(selectedTopic.id, selectedLanguage);
-
-  function randomizeTopic() {
-    setIsCustom(false);
-    setSelectedTopic(getRandomImpromptuTopic(selectedTopic.id));
-  }
-
   async function startPrep() {
-    setStage("prep");
+    if (startingRef.current) return;
+    setFlowError(null);
+    if (!customPrompt.trim()) { setFlowError("Enter a topic or domain first."); return; }
+    startingRef.current = true; setStarting(true);
     try {
-      const sess = await createSession({
-        mode: "impromptu",
-        topic: activeTopic.prompt,
-        audience: "",
-        language: selectedLanguage,
-        difficulty: selectedDifficulty,
-      });
+      const sess = await createSession({ mode: "impromptu", topic: customPrompt.trim(),
+        language: selectedLanguage, difficulty: selectedDifficulty });
+      const generated = sess.current_action?.question_spec?.prompt_text;
+      if (!generated) throw new Error("Question generation failed. Please retry.");
+      setSelectedTopic({ id: sess.id, prompt: generated, category: "Spontaneous Thought", hint: "" });
+      setCustomPrompt(generated);
       setSessionId(sess.id);
-    } catch (e) {
-      console.warn("Could not create impromptu backend session:", e);
-    }
+      setPendingMedia(null);setAnalysisResult(null);setIsRetry(false);
+      setStage("prep");
+    } catch (err) { setFlowError(err instanceof Error ? err.message : "Could not start practice."); }
+    finally {startingRef.current=false;setStarting(false);}
   }
 
-  const [liveTranscript, setLiveTranscript] = useState<string>("");
-  const [sttMetrics, setSttMetrics] = useState<{
-    wpm: number;
-    filler_rate: number;
-    pause_ratio: number;
-    primary_language: string;
-    code_switch_rate: number;
-  } | null>(null);
-
-  async function handleSpeechSubmit(payload: RecordingSubmitPayload) {
+  function handleSpeechSubmit(payload: RecordingSubmitPayload) {
+    setFlowError(null);
+    setPendingMedia(payload);
+    setIsRetry(false);
     setStage("analyzing");
-    if (payload.audioBlob && payload.audioBlob.size > 200) {
-      try {
-        const langCode = selectedLanguage.toLowerCase().slice(0, 2);
-        const result = await transcribeAudioBlob(payload.audioBlob, langCode);
-        if (result.text && result.text.trim()) {
-          setLiveTranscript(result.text.trim());
-          setSttMetrics({
-            wpm: result.metrics.wpm,
-            filler_rate: result.metrics.filler_rate,
-            pause_ratio: result.metrics.pause_ratio,
-            primary_language: result.metrics.primary_language,
-            code_switch_rate: result.metrics.code_switch_rate,
-          });
-        }
-      } catch (e) {
-        console.warn("Local STT transcription error:", e);
-      }
-    }
   }
 
   async function onSpeechAnalyzed() {
-    const finalTranscript = liveTranscript || transcript;
-    const res = await analyzeImpromptu(config, finalTranscript);
-    if (sttMetrics && sttMetrics.wpm > 0) {
-      res.analysis.initialWpm = Math.round(sttMetrics.wpm);
-      res.analysis.finalWpm = Math.round(sttMetrics.wpm * 0.95);
-      res.analysis.fillerCount = Math.round((sttMetrics.filler_rate / 100) * (finalTranscript.split(/\s+/).length || 20));
-      res.analysis.codeSwitchingDetected = sttMetrics.code_switch_rate > 0.15;
+    if (!sessionId || !pendingMedia) return;
+    try {
+      await analyzeRecording(sessionId, isRetry ? "retry" : "impromptu", pendingMedia,
+        languageCode(selectedLanguage), isRetry ? challengeResult?.prompt : activeTopic.prompt);
+      const res = await getPracticeReport<ImpromptuAnalysis>(sessionId);
+      setAnalysisResult(res.analysis);
+      setDiagnosisResult(res.diagnosis);
+      setChallengeResult(res.challenge);
+      await saveGenericSession({ sessionId, topic: activeTopic.prompt, mode: "impromptu",
+        overallScore: res.analysis.overallScore, scoreDelta: 0, primaryWeakness: res.diagnosis.headline });
+      setStage("report");
+    } catch (err) {
+      setFlowError(err instanceof Error ? err.message : "Analysis failed. Record again.");
+      setStage(isRetry ? "challenge-replay" : "speaking");
     }
-    setAnalysisResult(res.analysis);
-    setDiagnosisResult(res.diagnosis);
-    setChallengeResult(res.challenge);
-
-    await saveGenericSession({
-      sessionId: sessionId || undefined,
-      topic: `Impromptu: ${config.topic.prompt.slice(0, 45)}...`,
-      mode: "impromptu",
-      language: selectedLanguage,
-      difficulty: selectedDifficulty,
-      overallScore: res.analysis.overallScore,
-      scoreDelta: 12,
-      primaryWeakness: "Lexical repetition after 30s",
-      diagnosis: res.diagnosis,
-      transcript: finalTranscript,
-      metrics: res.analysis,
-    });
-
-    setStage("report");
   }
-
 
   const speakQuestion: RoundQuestion = {
     id: `imp-speak-${selectedTopic.id}`,
@@ -192,11 +153,8 @@ export default function ImpromptuPage() {
   };
 
   const challengeQuestion: RoundQuestion = {
-    id: `imp-chal-q`,
-    prompt: `30s PEEL Drill: Point (5s) → Explanation (10s) → Example (10s) → Link (5s).`,
-    round: "replay",
-    pressure: "time-limit",
-    timeLimitSeconds: 30,
+    id: "imp-challenge", prompt: challengeResult?.prompt || activeTopic.prompt,
+    round: "replay", pressure: "time-limit", timeLimitSeconds: challengeResult?.timeLimitSeconds || selectedDuration,
   };
 
   return (
@@ -224,6 +182,7 @@ export default function ImpromptuPage() {
         )}
       </div> */}
 
+      {flowError && <p role="alert" className="mb-4 rounded-xl border border-rose/40 bg-paper-raised p-4 text-sm text-rose-ink">{flowError}{pendingMedia && <button className="ml-3 font-semibold underline" onClick={()=>{setFlowError(null);setStage(isRetry?"challenge-analyzing":"analyzing");}}>Retry analysis</button>}</p>}
       <AnimatePresence mode="wait">
         <motion.div
           key={stage}
@@ -244,8 +203,8 @@ export default function ImpromptuPage() {
                   Impromptu Speaking Mode
                 </h1>
                 <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">
-                  Receive a prompt you didn&apos;t prepare for. Pitchground measures your initial fluency burst, detects
-                  the exact second vocabulary exhaustion sets in, and trains you to close cleanly without looping.
+                  Receive a prompt you didn&apos;t prepare for. Review your measured pacing, pauses, fillers and answer
+                  structure, then practice a clearer response using feedback from your recording.
                 </p>
               </div>
 
@@ -253,66 +212,11 @@ export default function ImpromptuPage() {
               <div>
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">Topic Selection</h2>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setIsCustom(!isCustom)}
-                      className="h-7 text-xs"
-                    >
-                      <PenTool size={12} />
-                      {isCustom ? "Pick Preset" : "Custom Topic"}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={randomizeTopic} className="h-7 text-xs">
-                      <Dices size={12} />
-                      Randomize
-                    </Button>
-                  </div>
                 </div>
-
-                {isCustom ? (
-                  <div className="rounded-2xl border border-line bg-paper-raised p-4">
-                    <label htmlFor="custom-prompt-input" className="mb-2 block text-xs font-medium text-muted">
-                      Enter any thought-provoking prompt, metaphor, or question:
-                    </label>
-                    <input
-                      id="custom-prompt-input"
-                      type="text"
-                      value={customPrompt}
-                      onChange={(e) => setCustomPrompt(e.target.value)}
-                      placeholder="e.g. Is artificial intelligence making human writing better or lazier?"
-                      className="w-full rounded-xl border border-line bg-paper px-4 py-3 text-sm text-ink outline-none transition-colors focus:border-lavender-ink"
-                    />
-                  </div>
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {IMPROMPTU_TOPICS.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => {
-                          setIsCustom(false);
-                          setSelectedTopic(t);
-                        }}
-                        className={`flex flex-col items-start rounded-2xl border p-4 text-left transition-all ${
-                          selectedTopic.id === t.id && !isCustom
-                            ? "border-lavender bg-lavender/20 shadow-soft"
-                            : "border-line bg-paper-raised hover:border-line-strong"
-                        }`}
-                      >
-                        <Badge
-                          variant={selectedTopic.id === t.id && !isCustom ? "lavender" : "outline"}
-                          size="sm"
-                          className="mb-2"
-                        >
-                          {t.category}
-                        </Badge>
-                        <p className="font-display text-sm font-semibold text-ink">&quot;{t.prompt}&quot;</p>
-                        <p className="mt-1 text-xs text-ink-soft">{t.hint}</p>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="rounded-2xl border border-line bg-paper-raised p-4">
+                  <label htmlFor="custom-prompt-input" className="mb-2 block text-xs font-medium text-muted">Enter any topic or domain for your speaking prompt</label>
+                  <input id="custom-prompt-input" value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)} placeholder="What would you like to speak about?" className="w-full rounded-xl border border-line bg-paper px-4 py-3 text-sm text-ink outline-none focus:border-lavender-ink" />
+                </div>
               </div>
 
               {/* 2. Duration Preset Pills */}
@@ -373,8 +277,8 @@ export default function ImpromptuPage() {
                       {selectedDuration}s · {selectedLanguage} · 10s prep timer
                     </p>
                   </div>
-                  <Button size="lg" onClick={startPrep} className="shrink-0">
-                    Start 10s Prep
+                  <Button size="lg" disabled={starting} onClick={startPrep} className="shrink-0">
+                    {starting ? "Preparing prompt…" : "Start 10s Prep"}
                     <ArrowRight size={16} />
                   </Button>
                 </Card>
@@ -421,17 +325,17 @@ export default function ImpromptuPage() {
                   Targeted Pacing Drill
                 </Badge>
                 <p className="font-display text-lg font-semibold text-ink">
-                  PEEL Framework Rehearsal (Point → Explain → Example → Link)
+                  {challengeResult?.objective}
                 </p>
                 <p className="mt-1 text-xs text-ink-soft">
-                  Maintain uniform velocity across 30 seconds without looping back to the opening statement.
+                  {challengeResult?.framework.join(" → ")}
                 </p>
               </Card>
 
               <RecordingPanel
                 question={challengeQuestion}
                 language={selectedLanguage}
-                onSubmit={() => setStage("challenge-analyzing")}
+                onSubmit={(payload) => { setFlowError(null);setPendingMedia(payload); setIsRetry(true); setStage("challenge-analyzing"); }}
               />
             </div>
           )}
@@ -439,8 +343,8 @@ export default function ImpromptuPage() {
           {/* CHALLENGE ANALYZING */}
           {stage === "challenge-analyzing" && (
             <AnalyzingState
-              stages={["Evaluating PEEL framework adherence...", "Updating speech metrics..."]}
-              onDone={() => setStage("done")}
+              stages={["Analyzing your recorded retry...", "Updating speech metrics..."]}
+              onDone={onSpeechAnalyzed}
             />
           )}
 
@@ -450,9 +354,9 @@ export default function ImpromptuPage() {
               <Badge variant="teal" size="sm" className="mx-auto mb-4">
                 Drill Completed
               </Badge>
-              <h2 className="font-display text-3xl text-ink">Pacing & Structure Reclaimed!</h2>
+              <h2 className="font-display text-3xl text-ink">Practice recorded</h2>
               <p className="mx-auto mt-3 max-w-md text-[15px] text-ink-soft">
-                Your late-phase speaking pace stabilized at 138 WPM and circular repetition dropped to zero.
+                Review the measured results in your report and session history.
               </p>
               <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
                 <Button size="lg" onClick={() => router.push("/dashboard")}>

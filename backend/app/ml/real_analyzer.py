@@ -1,146 +1,70 @@
 from __future__ import annotations
 
-import logging
+from app.agents.llm_client import LLMError, settings_for
 from app.ml.acoustic import AcousticExtractor
 from app.ml.content import ContentEvaluator
 from app.ml.language import LanguageExtractor
 from app.ml.protocols import AttemptAnalyzerProtocol
-from app.ml.types import (
-    AnalysisConfig,
-    AttemptMedia,
-    FusedDimensions,
-    QualityFlags,
-    SignalBundle,
-    Transcript,
-)
+from app.ml.scoring_policy import load_policy
+from app.ml.types import AnalysisConfig, AttemptMedia, FusedDimensions, QualityFlags, SignalBundle, Transcript
 from app.ml.vision import VisionExtractor
+from app.ml.speech_quality import validate_transcript, SPEECH_PIPELINE_VERSION
+from app.ml.fillers import FillerDetector
 
-logger = logging.getLogger(__name__)
+
+def weighted(values, weights):
+    available=[(values[key],weight) for key,weight in weights.items() if values.get(key) is not None]
+    total=sum(weight for _,weight in available)
+    return round(sum(value*weight for value,weight in available)/total,3) if total else None
 
 
 class RealAnalyzer(AttemptAnalyzerProtocol):
-    """Production ML Analyzer combining local Computer Vision, Acoustic Prosody, 
-    Linguistic Disfluencies (fillers), and Semantic Content evaluation.
-    No hardcoded scores or fixture shortcuts.
-    """
-
     def __init__(self):
-        self.vision = VisionExtractor(sample_fps=5.0)
-        self.acoustic = AcousticExtractor()
-        self.language = LanguageExtractor()
-        self.content = ContentEvaluator()
+        self.vision=VisionExtractor()
+        self.acoustic=AcousticExtractor()
+        self.language=LanguageExtractor()
+        self.content=ContentEvaluator()
 
-    def analyze_attempt(
-        self,
-        media: AttemptMedia,
-        transcript: Transcript,
-        config: AnalysisConfig,
-    ) -> SignalBundle:
-        warnings: list[str] = []
-
-        # 1. Linguistic & Filler Analysis (Preserves verbatim disfluencies from model)
-        lang_signals, filler_rate = self.language.extract(transcript, config.practice_language)
-
-        # 2. Acoustic Prosody & Speaking Rate from Audio (Librosa)
-        acoustic_signals, speaking_score = self.acoustic.extract(media.audio_path, transcript.text)
-        acoustic_signals.filler_rate = filler_rate
-
-        # 3. Computer Vision & Stress Analysis (MediaPipe Face Mesh + Pose)
-        visual_signals = None
+    def analyze_attempt(self,media:AttemptMedia,transcript:Transcript,config:AnalysisConfig)->SignalBundle:
+        policy=load_policy()
+        warnings=["heuristic_fusion_uncalibrated", "stress_model_not_calibrated"]
+        language,_=self.language.extract(transcript,config.practice_language)
+        acoustic,_=self.acoustic.extract(media.audio_path,transcript.text)
+        if transcript.text.strip(): validate_transcript(transcript, acoustic.duration_sec)
+        if transcript.text.strip():
+            FillerDetector().apply(acoustic,media.audio_path,transcript)
+            if acoustic.filler_detection.get("status")!="complete": warnings.append("waveform_filler_detection_unavailable")
+            warnings.extend(acoustic.filler_detection.get("warnings",[]))
+        filler_rate=acoustic.filler_rate
+        visual=None
         if not config.skip_vision and media.video_path:
-            visual_signals, _ = self.vision.extract(media.video_path)
-            if visual_signals is None:
-                warnings.append("video_processing_failed")
-        else:
-            warnings.append("skip_vision_active")
-
-        # 4. Content Key-Point Coverage
-        content_signals = self.content.evaluate(transcript.text, config.question_key_points)
-
-        # 5. Multimodal Signal Fusion (Computed dynamically, 0.0 to 1.0)
-        has_speech = bool(transcript.text.strip()) and (acoustic_signals.wpm > 0.0 or len(transcript.text.split()) > 0)
-
-        if not has_speech:
-            warnings.append("no_speech_detected")
-            fused = FusedDimensions(
-                fluency=0.0,
-                composure=0.0,
-                presence=round(0.50 * (1.0 - visual_signals.gaze_away), 2) if visual_signals else 0.0,
-                structure=0.0,
-                language_stability=0.0,
-                content=0.0,
-            )
-            return SignalBundle(
-                attempt_id=media.attempt_id,
-                transcript=transcript,
-                acoustic=acoustic_signals,
-                language=lang_signals,
-                visual=visual_signals,
-                content=content_signals,
-                fused=fused,
-                quality=QualityFlags(
-                    audio_ok=False,
-                    video_ok=visual_signals is not None,
-                    warnings=warnings,
-                ),
-            )
-
-        # Fluency: Pacing (120-150 WPM optimal), low pauses, low filler rate
-        norm_wpm = min(1.0, acoustic_signals.wpm / 140.0) if acoustic_signals.wpm > 0 else 0.1
-        fluency = round(
-            0.40 * norm_wpm
-            + 0.35 * max(0.0, 1.0 - acoustic_signals.pause_ratio)
-            + 0.25 * max(0.0, 1.0 - (acoustic_signals.filler_rate / 10.0)),
-            2,
-        )
-
-        # Composure: Vocal stability (low energy & pitch jitter) + physical composure (no freeze panic)
-        vocal_stability = max(0.0, 1.0 - min(1.0, acoustic_signals.energy_var * 2.0))
-        if visual_signals:
-            composure = round(
-                0.50 * vocal_stability + 0.50 * (1.0 - visual_signals.freeze_ratio),
-                2,
-            )
-        else:
-            composure = round(vocal_stability, 2)
-
-        # Presence: Camera eye contact + expressive hand gestures (or vocal delivery confidence if audio-only)
-        if visual_signals:
-            presence = round(
-                0.50 * (1.0 - visual_signals.gaze_away)
-                + 0.30 * (1.0 - visual_signals.head_down)
-                + 0.20 * visual_signals.gesture_energy,
-                2,
-            )
-        else:
-            presence = round(0.50 * (speaking_score / 100.0) + 0.50 * composure, 2)
-
-        # Structure: Logical progression, key point alignment, absence of rambling
-        structure = round(min(1.0, (content_signals.coverage * 0.55) + (fluency * 0.45)), 2)
-
-        # Language Stability: Target language adherence without unintended code-switching
-        lang_stability = round(max(0.0, lang_signals.primary_ratio - (lang_signals.code_switch_rate * 0.5)), 2)
-
-        fused = FusedDimensions(
-            fluency=max(0.0, min(1.0, fluency)),
-            composure=max(0.0, min(1.0, composure)),
-            presence=max(0.0, min(1.0, presence)),
-            structure=max(0.0, min(1.0, structure)),
-            language_stability=max(0.0, min(1.0, lang_stability)),
-            content=max(0.0, min(1.0, content_signals.coverage)),
-        )
-
-        return SignalBundle(
-            attempt_id=media.attempt_id,
-            transcript=transcript,
-            acoustic=acoustic_signals,
-            language=lang_signals,
-            visual=visual_signals,
-            content=content_signals,
-            fused=fused,
-            quality=QualityFlags(
-                audio_ok=True,
-                video_ok=visual_signals is not None,
-                warnings=warnings,
-            ),
-        )
+            self.vision.sample_fps=config.sample_fps
+            visual,_=self.vision.extract(media.video_path)
+            if visual is None: warnings.append("visual_measurements_unavailable")
+        else: warnings.append("no_video")
+        valid=bool(transcript.text.strip()) and acoustic.wpm>0 and acoustic.speech_duration_sec>0
+        provenance=dict(source="recorded_media",scoring_policy=policy,answer_model=settings_for("answers").model,
+                        speech_pipeline=SPEECH_PIPELINE_VERSION, transcription=transcript.provenance,
+                        filler_detection=acoustic.filler_detection,
+                        modalities={"audio":valid,"video":visual is not None})
+        if not valid:
+            return SignalBundle(attempt_id=media.attempt_id,transcript=transcript,acoustic=acoustic,
+                language=language,visual=visual,fused=FusedDimensions(),
+                quality=QualityFlags(audio_ok=False,video_ok=visual is not None,warnings=warnings+["no_usable_speech"]),provenance=provenance)
+        content=self.content.validate_answer(transcript.text,config.question_prompt,config.question_key_points,config.reference_answer,transcript.language)
+        if content is None:
+            raise LLMError("invalid_response", "answers")
+        fluency=weighted(dict(pace=min(1,acoustic.wpm/policy["pace_reference_wpm"]),
+                             continuity=1-acoustic.pause_ratio,
+                             fillers=max(0,1-filler_rate/policy["filler_reference_per_100_words"]) if filler_rate is not None else None),policy["fluency_weights"])
+        # Retain only observed terms. Natural stillness and absent hands are not failures.
+        composure=max(0,1-acoustic.energy_var/policy["energy_variability_reference"])
+        presence=weighted(dict(camera_orientation=1-visual.gaze_away if visual and visual.gaze_away is not None else None,
+                               head_orientation=1-visual.head_down if visual and visual.head_down is not None else None),policy["presence_weights"])
+        content_values=[x for x in (content.correctness,content.relevance,content.coverage) if x is not None] if content else []
+        fused=FusedDimensions(fluency=fluency,composure=composure,presence=presence,
+            structure=content.structure if content else None,language_stability=language.primary_ratio,
+            content=round(sum(content_values)/len(content_values),3) if content_values else None)
+        return SignalBundle(attempt_id=media.attempt_id,transcript=transcript,acoustic=acoustic,
+            language=language,visual=visual,content=content,fused=fused,provenance=provenance,
+            quality=QualityFlags(audio_ok=True,video_ok=visual is not None,warnings=warnings))

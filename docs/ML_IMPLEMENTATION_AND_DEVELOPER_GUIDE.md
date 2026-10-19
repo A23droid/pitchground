@@ -1,5 +1,7 @@
 # Pitchground: ML Implementation & Developer Guide
 
+> Historical planning/blueprint document. For the current product audit, implementation status and remaining validation, see [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md). Demo fixtures and fixed-score examples below are not production behavior.
+
 > **Consolidated Document 2 of 2**  
 > Covers: The 5-Step Master Roadmap, Complete Ready-to-Run Code Blueprints, Zero-Conflict Git Setup, and Verification Testing.
 

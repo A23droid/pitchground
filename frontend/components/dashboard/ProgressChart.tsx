@@ -15,6 +15,7 @@ export function ProgressChart({ data, className }: { data: ProgressPoint[]; clas
       <p className="mb-3 text-xs leading-relaxed text-ink-soft sm:mb-4 sm:text-[13px]">
         The metric that breaks down first under pressure, and the one Pitchground trains hardest.
       </p>
+      {!data.length && <p className="rounded-xl border border-line bg-paper p-4 text-sm text-muted">Your progress will appear after a recorded practice session.</p>}
       <div className="h-48 w-full min-w-0 sm:h-56">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 6, left: -16, bottom: 0 }}>
@@ -35,7 +36,7 @@ export function ProgressChart({ data, className }: { data: ProgressPoint[]; clas
               padding={{ left: 6, right: 6 }}
             />
             <YAxis
-              domain={[40, 90]}
+              domain={[0, 100]}
               axisLine={false}
               tickLine={false}
               tick={{ fill: "var(--muted)", fontSize: 10 }}

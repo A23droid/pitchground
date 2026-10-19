@@ -62,12 +62,12 @@ export async function loginWithDemo(): Promise<AuthSession> {
 }
 
 export async function completeTokenLogin(token: string): Promise<AuthSession> {
-  setToken(token);
   const res = await fetch(`${API_URL}/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("Invalid session");
   const data = (await res.json()) as { name: string; email: string; learner_id: string };
+  setToken(token);
   const session = { name: data.name, email: data.email, learnerId: data.learner_id };
   saveAuth(session);
   return session;

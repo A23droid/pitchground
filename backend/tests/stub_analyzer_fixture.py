@@ -1,4 +1,4 @@
-from __future__ import annotations
+"""Test-only deterministic fixture; never imported by the application."""
 
 from app.ml.types import (
     AcousticSignals,

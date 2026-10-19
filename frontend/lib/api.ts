@@ -43,7 +43,9 @@ export async function authJson<T>(path: string, init: RequestInit = {}): Promise
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail || body);
+      const error = body.detail?.error || body.detail || body.error || body;
+      detail = typeof error === "string" ? error : typeof error.message === "string" ? error.message : Array.isArray(error) ? error.map((item: { msg?: string }) => item.msg || "Invalid request").join("; ") : `Request failed (${res.status})`;
+      if (body.retry_after) detail += ` Retry in ${body.retry_after}s.`;
     } catch {
       /* ignore */
     }

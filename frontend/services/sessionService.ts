@@ -27,7 +27,7 @@ export interface BackendAttempt {
 }
 
 export interface CreateSessionParams {
-  mode?: "interview" | "debate" | "impromptu" | "language-diagnostic";
+  mode?: "interview" | "debate" | "impromptu" | "language-diagnostic" | "recovery-training";
   topic: string;
   audience?: string;
   language?: string;
@@ -80,11 +80,12 @@ export async function advanceSession(sessionId: string, fromPhase: string): Prom
 
 export async function createAttempt(
   sessionId: string,
-  role: "baseline" | "pressure" | "retry",
+  role: "baseline" | "pressure" | "retry" | string,
+  options?: { language?: string; prompt?: string; interruption_sec?: number },
 ): Promise<BackendAttempt> {
   return authJson<BackendAttempt>(`/v1/sessions/${sessionId}/attempts`, {
     method: "POST",
-    body: JSON.stringify({ role }),
+    body: JSON.stringify({ role, ...options }),
   });
 }
 
@@ -134,16 +135,27 @@ export async function waitForPhase(
 export async function waitForAttemptComplete(
   sessionId: string,
   attemptId: string,
-  timeoutMs = 90000,
+  timeoutMs = 600000,
 ): Promise<any> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const attempt = await getAttempt(sessionId, attemptId);
     if (attempt.analysis_status === "complete" && attempt.metrics) return attempt;
-    if (attempt.analysis_status === "failed") throw new Error("Analysis failed");
+    if (attempt.analysis_status === "failed") throw new Error(attempt.analysis_error?.message ? `${attempt.analysis_error.message}${attempt.analysis_error.retry_after ? ` Retry in ${attempt.analysis_error.retry_after}s.` : ""}` : "Analysis failed. Please retry.");
     await new Promise((r) => setTimeout(r, 800));
   }
   throw new Error("Timed out waiting for analysis");
+}
+
+export async function waitForAttemptTranscript(sessionId: string, attemptId: string, timeoutMs = 600000): Promise<any> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const attempt = await getAttempt(sessionId, attemptId);
+    if (attempt.transcript_validated && attempt.transcript?.text?.trim()) return attempt;
+    if (attempt.analysis_status === "failed") throw new Error(attempt.analysis_error?.message || "Transcription failed. Retry this recording.");
+    await new Promise(r => setTimeout(r, 800));
+  }
+  throw new Error("Transcription is taking too long. Retry this recording.");
 }
 
 export async function getDiagnosis(sessionId: string): Promise<any> {
@@ -159,7 +171,8 @@ export async function getComparison(sessionId: string): Promise<any> {
 }
 
 export function questionFromAction(action: any, round: "baseline" | "pressure" | "replay" | "retry") {
-  const prompt = action?.question_spec?.prompt_text || "Explain your answer clearly.";
+  const prompt = action?.question_spec?.prompt_text;
+  if (typeof prompt !== "string" || !prompt.trim()) throw new Error("The question is not ready. Please retry.");
   const timeLimit = action?.pressure_spec?.time_limit_sec;
   return {
     id: `q-${round}-${Date.now()}`,

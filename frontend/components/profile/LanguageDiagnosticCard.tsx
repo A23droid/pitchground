@@ -4,15 +4,15 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Progress } from "@/components/ui/Progress";
+import type { LearnerProfile } from "@/lib/types";
 import { Languages } from "lucide-react";
 
-const rows = [
-  { label: "Concept understanding", value: 92 },
-  { label: "Malayalam communication", value: 88 },
-  { label: "English articulation", value: 61 },
-];
-
-export function LanguageDiagnosticCard() {
+export function LanguageDiagnosticCard({ comparison }: { comparison: LearnerProfile["languageComparison"] }) {
+  const rows: { label: string; value: number }[] = comparison ? [
+    ...(comparison.content_score !== null ? [{ label: "Answer key-point coverage", value: comparison.content_score }] : []),
+    { label: `${comparison.language} delivery`, value: comparison.comfortable_score },
+    { label: "English delivery", value: comparison.english_score },
+  ] : [];
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <Card className="p-6">
@@ -21,11 +21,11 @@ export function LanguageDiagnosticCard() {
           <h2 className="font-display text-lg text-ink">Knowledge vs. articulation</h2>
         </div>
         <p className="mb-5 text-[13px] text-ink-soft">
-          Same concept, explained comfortably in Malayalam, then again in English, isolating what's actually
-          holding you back.
+          Compare the same concept in your comfortable language and English.
         </p>
 
         <div className="flex flex-col gap-4">
+          {!comparison && <p className="rounded-xl border border-line bg-paper p-4 text-sm text-muted">Open a language diagnostic session to view your recorded comparison.</p>}
           {rows.map((r) => (
             <div key={r.label}>
               <div className="mb-1.5 flex items-center justify-between text-xs">
@@ -42,9 +42,7 @@ export function LanguageDiagnosticCard() {
             Recommendation
           </Badge>
           <p className="text-sm text-ink-soft">
-            Practice explaining technical concepts in professional English: the gap isn&apos;t understanding, it&apos;s
-            target-language delivery. Code-switching in earlier attempts was treated as a legitimate signal, not a
-            penalty.
+            Complete both recordings before drawing conclusions about understanding or language delivery.
           </p>
         </div>
       </Card>

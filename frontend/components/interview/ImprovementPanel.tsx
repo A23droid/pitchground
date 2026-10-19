@@ -29,7 +29,7 @@ export function ImprovementPanel({
             Same pressure. Different result.
           </Badge>
           <h2 className="font-display text-2xl text-ink sm:text-[1.8rem]">
-            You improved under the same pressure condition.
+            {scoreAfter > scoreBefore ? "Your overall score increased under the same pressure." : scoreAfter < scoreBefore ? "Your overall score decreased under the same pressure." : "Your overall score stayed the same under pressure."}
           </h2>
           <div className="mt-5 flex items-center justify-center gap-5">
             <ScorePill label="Before" value={scoreBefore} tone="rose" />

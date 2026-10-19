@@ -1,5 +1,7 @@
 # Pitchground: ML Architecture & Technical Specification
 
+> Historical planning/blueprint document. For the current product audit, implementation status and remaining validation, see [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md). Demo fixtures and fixed-score examples below are not production behavior.
+
 > **Consolidated Document 1 of 2**  
 > Covers: End-to-End System Analysis, Architectural Boundaries, Merge-Conflict Prevention Strategy, and In-Depth Technical Specifications for all 3 Custom Local ML Models.
 

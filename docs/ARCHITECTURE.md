@@ -1,5 +1,7 @@
 # Pitchground architecture
 
+> Historical planning/blueprint document. For the current product audit, implementation status and remaining validation, see [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md). Demo fixtures and fixed-score examples below are not production behavior.
+
 Planning document for the hackathon **P0** backend: a multilingual adaptive interview loop. This repository is **backend + ML integration only**. The frontend is a separate Next.js app owned by another teammate.
 
 **Do not treat this file as license to add Kafka, Redis, Celery, a vector database, multiple LLM vendors, or one process per agent.**

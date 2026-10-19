@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import json
+import logging
+import tempfile
+from pathlib import Path
+from app.storage.media import resolve_local_path, NHOST_PREFIX
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.agents.llm_client import LLMError
 from app.agents.challenge import render_challenge
 from app.agents.diagnosis import render_diagnosis
 from app.agents.interviewer import render_prompt
 from app.ml.factory import get_analyzer, get_transcriber
-from app.ml.types import AnalysisConfig, AttemptMedia, SignalBundle, Transcript
+from app.ml.types import AnalysisConfig, AttemptMedia, SignalBundle, Transcript, TranscriptSegment
+from app.ml.speech_quality import SPEECH_PIPELINE_VERSION
 from app.models import (
     Attempt,
     AttemptMetrics,
@@ -19,7 +25,6 @@ from app.models import (
     DiagnosisRow,
     EvidenceRow,
     FailureCandidateRow,
-    QuestionBankItem,
     Session as SessionModel,
     SessionEvent,
     TranscriptRow,
@@ -27,7 +32,7 @@ from app.models import (
 from app.orchestration.state_machine import ROLE_FOR_RECORDING, assert_can_advance
 from app.services.baseline import baseline_vector
 from app.services.comparison import compare_attempts
-from app.services.detector import detect
+from app.services.detector import detect, _get as metric_value
 from app.services.learner_state import update_from_bundle
 from app.services.ws_hub import hub
 
@@ -46,21 +51,13 @@ def session_to_dict(session: SessionModel) -> dict:
         "audience": session.audience,
         "language": session.language,
         "difficulty": session.difficulty,
-        "current_action": json.loads(session.current_action_json) if session.current_action_json else None,
+        "current_action": {k: v for k, v in json.loads(session.current_action_json).items() if k != "answer_rubric"} if session.current_action_json else None,
         "latest_diagnosis": json.loads(session.diagnosis.payload_json) if session.diagnosis else None,
         "latest_challenge": json.loads(session.challenge.payload_json) if session.challenge else None,
         "latest_comparison": json.loads(session.comparison.payload_json) if session.comparison else None,
         "created_at": _iso(session.created_at),
         "updated_at": _iso(session.updated_at),
     }
-
-
-def _bank(db: Session, topic: str, role: str) -> QuestionBankItem | None:
-    return (
-        db.query(QuestionBankItem)
-        .filter(QuestionBankItem.topic == topic, QuestionBankItem.role == role)
-        .first()
-    )
 
 
 def _set_action(session: SessionModel, action: dict) -> None:
@@ -83,18 +80,16 @@ async def _emit(session: SessionModel, event_type: str, payload: dict) -> None:
 
 
 def build_prompt_action(db: Session, session: SessionModel, role: str) -> dict:
-    item = _bank(db, session.topic, role) or _bank(db, "Database Systems", role)
-    prompt_text = item.prompt if item else "Explain the core idea behind this topic."
-    rendered = render_prompt(prompt_text, language="en", role=role)
-    if item:
-        rendered["question_bank_id"] = item.id
+    rendered = render_prompt(session.topic, language=session.language, role=role,
+                             mode=session.mode, audience=session.audience, difficulty=session.difficulty)
     pressure = {
-        "time_limit_sec": item.time_limit_sec if item else (20 if role != "baseline" else None),
+        "time_limit_sec": 20 if role != "baseline" else None,
         "interruption": False,
     }
     action = {
         "type": "show_question",
-        "question_spec": rendered,
+        "question_spec": {k: v for k, v in rendered.items() if k not in ("key_points", "reference_answer")},
+        "answer_rubric": {k: rendered[k] for k in ("key_points", "reference_answer")},
         "pressure_spec": pressure,
         "ui_hints": {"show_timer": bool(pressure["time_limit_sec"]), "show_evidence": role != "baseline"},
     }
@@ -139,6 +134,11 @@ def advance_session(db: Session, session: SessionModel, from_phase: str) -> Sess
         if session.challenge:
             action["question_spec"] = {"prompt_text": session.challenge.prompt_text, "language": "en"}
             action["training_spec"] = json.loads(session.challenge.training_spec_json)
+            spec = action["training_spec"]
+            action["pressure_spec"] = {"time_limit_sec": spec.get("time_limit_sec"), "interruption": spec.get("interruption", False)}
+            pressure_attempt = next((a for a in reversed(session.attempts) if a.role == "pressure"), None)
+            if pressure_attempt:
+                action["answer_rubric"] = json.loads(pressure_attempt.pressure_spec_json or "{}").get("answer_rubric", {})
         _set_action(session, action)
     elif nxt == "retry_recording":
         action = json.loads(session.current_action_json or "{}")
@@ -176,13 +176,14 @@ def advance_session(db: Session, session: SessionModel, from_phase: str) -> Sess
     return session
 
 
-def create_attempt(db: Session, session: SessionModel, role: str) -> Attempt:
+def create_attempt(db: Session, session: SessionModel, role: str, language: str | None = None, prompt: str | None = None, interruption_sec: float | None = None) -> Attempt:
     expected = ROLE_FOR_RECORDING.get(session.phase)
-    if expected and expected != role:
+    if session.mode == "interview" and (not expected or expected != role):
         raise ValueError(f"Role {role} not allowed in phase {session.phase}")
     action = json.loads(session.current_action_json or "{}")
-    prompt = (action.get("question_spec") or {}).get("prompt_text") or ""
+    prompt = prompt or (action.get("question_spec") or {}).get("prompt_text") or ""
     pressure = action.get("pressure_spec") or {}
+    pressure = {**pressure, "answer_rubric": action.get("answer_rubric", {}), "language": language, "interruption_sec": interruption_sec}
     attempt = Attempt(
         session_id=session.id,
         role=role,
@@ -201,6 +202,7 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
     from app.db import SessionLocal
 
     db = SessionLocal()
+    downloads = []
     try:
         session = db.get(SessionModel, session_id)
         attempt = db.get(Attempt, attempt_id)
@@ -209,13 +211,39 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
         attempt.analysis_status = "queued"
         db.commit()
 
-        item = _bank(db, session.topic, attempt.role)
-        key_points = json.loads(item.key_points_json) if item else []
+        metadata = json.loads(attempt.pressure_spec_json or "{}")
+        rubric = metadata.get("answer_rubric", {})
+        key_points = rubric.get("key_points", [])
 
+        local_audio = resolve_local_path(attempt.audio_path)
+        local_video = resolve_local_path(attempt.video_path) if attempt.video_path else None
+        for original, resolved in ((attempt.audio_path, local_audio), (attempt.video_path, local_video)):
+            if original and original.startswith(NHOST_PREFIX) and resolved:
+                downloads.append(Path(resolved))
         transcriber = get_transcriber()
         analyzer = get_analyzer()
-        lang_hint = "hi" if "hi" in (session.language or "").lower() else ("en" if "en" in (session.language or "").lower() else "auto")
-        transcript = transcriber.transcribe(attempt.audio_path, language_hint=lang_hint)
+        lang_hint = metadata.get("language") or {"Hindi": "hi", "English": "en", "Malayalam": "ml", "Mixed": "auto"}.get(session.language, "auto")
+        cached_stt = metadata.get("transcription", {})
+        model_name = getattr(transcriber, "model_size", None)
+        same_model = not isinstance(model_name, str) or cached_stt.get("model") == model_name
+        if attempt.transcript and attempt.transcript.text and same_model and cached_stt.get("pipeline_version") == SPEECH_PIPELINE_VERSION:
+            segments=[TranscriptSegment.model_validate(s) for s in json.loads(attempt.transcript.segments_json or "[]")]
+            transcript=Transcript(text=attempt.transcript.text,language=attempt.transcript.language,segments=segments,
+                                  words=[word for segment in segments for word in segment.words],
+                                  confidence=cached_stt.get("confidence"),provenance=cached_stt)
+        else:
+            transcript = transcriber.transcribe(local_audio, language_hint=lang_hint)
+            if transcript.text.strip():
+                if attempt.transcript:
+                    attempt.transcript.text=transcript.text
+                    attempt.transcript.language=transcript.language
+                    attempt.transcript.segments_json=json.dumps([s.model_dump() for s in transcript.segments])
+                else:
+                    attempt.transcript=TranscriptRow(text=transcript.text,language=transcript.language,
+                                                    segments_json=json.dumps([s.model_dump() for s in transcript.segments]))
+                metadata["transcription"]={**transcript.provenance,"pipeline_version":SPEECH_PIPELINE_VERSION,"confidence":transcript.confidence}
+                attempt.pressure_spec_json=json.dumps(metadata)
+                db.commit()
         if not transcript.text:
             transcript = Transcript(
                 text="",
@@ -225,15 +253,23 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
                 words=[],
             )
 
-        media = AttemptMedia(attempt_id=attempt.id, audio_path=attempt.audio_path, video_path=attempt.video_path)
-        practice_lang = "hi" if "hi" in (session.language or "").lower() else "en"
+        media = AttemptMedia(attempt_id=attempt.id, audio_path=local_audio, video_path=local_video)
+        practice_lang = lang_hint
         config = AnalysisConfig(
             practice_language=practice_lang,
             question_key_points=key_points,
+            question_prompt=attempt.prompt,
+            reference_answer=rubric.get("reference_answer", ""),
             skip_vision=not bool(attempt.video_path),
             role=attempt.role,  # type: ignore[arg-type]
         )
         bundle = analyzer.analyze_attempt(media, transcript, config)
+        if not bundle.quality.audio_ok:
+            raise ValueError("No usable speech was detected. Check your microphone and record again.")
+        if session.mode == "recovery-training":
+            from app.ml.recovery import measure_recovery
+            bundle.recovery = measure_recovery(local_audio, transcript, config, metadata.get("interruption_sec"), analyzer)
+
 
         if attempt.transcript:
             attempt.transcript.text = transcript.text
@@ -252,7 +288,7 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
         if attempt.metrics:
             attempt.metrics.signal_bundle_json = bundle.model_dump_json()
         else:
-            db.add(AttemptMetrics(attempt_id=attempt.id, signal_bundle_json=bundle.model_dump_json()))
+            attempt.metrics = AttemptMetrics(signal_bundle_json=bundle.model_dump_json())
 
         if attempt.role == "baseline":
             vec = baseline_vector(bundle)
@@ -295,8 +331,21 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
                 pass
         except Exception:
             pass
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Attempt analysis failed for %s", attempt_id)
+        db.rollback()
+        attempt = db.get(Attempt, attempt_id)
+        if attempt:
+            attempt.analysis_status = "failed"
+            attempt.status = "failed"
+            db.add(SessionEvent(session_id=session_id, event_type="analysis_failed",
+                                payload_json=json.dumps({"attempt_id": attempt_id, "message": str(exc) if isinstance(exc, (LLMError, ValueError)) else "Analysis failed. Please retry.", "code": exc.code if isinstance(exc, LLMError) else "analysis_failed", "retry_after": exc.retry_after if isinstance(exc, LLMError) else None})))
+            db.commit()
     finally:
         db.close()
+        for download in downloads:
+            if download.resolve().parent == Path(tempfile.gettempdir()).resolve():
+                download.unlink(missing_ok=True)
 
 
 def run_diagnosis_pipeline(db: Session, session: SessionModel) -> None:
@@ -344,14 +393,24 @@ def run_diagnosis_pipeline(db: Session, session: SessionModel) -> None:
     )
     challenge = render_challenge(
         diagnosis,
-        item.prompt if item else "Retry the same topic under 20 seconds.",
+        pressure_a.prompt,
         session.language or "en",
+        transcript=transcript,
+        difficulty=session.difficulty,
     )
 
+    # The replay must preserve the actual question and pressure; coaching cannot change the experiment.
+    challenge["prompt_text"] = pressure_a.prompt
+    original_pressure = json.loads(pressure_a.pressure_spec_json or "{}")
+    challenge["training_spec"].update(time_limit_sec=original_pressure.get("time_limit_sec"),
+                                      interruption=original_pressure.get("interruption", False),
+                                      replay_condition="same_prompt")
+    diagnosis["attempt_count"] = 2
+    diagnosis["metric_rows"] = [{"metric":e.metric,"a":metric_value(base_bundle,e.metric),"b":metric_value(press_bundle,e.metric)} for e in evidence]
     payload = diagnosis
     if session.diagnosis:
         session.diagnosis.condition = diagnosis["condition"]
-        session.diagnosis.confidence = diagnosis["confidence"]
+        session.diagnosis.confidence = "uncalibrated"
         session.diagnosis.rationale = diagnosis["rationale"]
         session.diagnosis.evidence_ids_json = json.dumps(diagnosis["evidence_ids"])
         session.diagnosis.payload_json = json.dumps(payload)
@@ -360,7 +419,7 @@ def run_diagnosis_pipeline(db: Session, session: SessionModel) -> None:
             DiagnosisRow(
                 session_id=session.id,
                 condition=diagnosis["condition"],
-                confidence=diagnosis["confidence"],
+                confidence="uncalibrated",
                 rationale=diagnosis["rationale"],
                 evidence_ids_json=json.dumps(diagnosis["evidence_ids"]),
                 payload_json=json.dumps(payload),

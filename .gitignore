@@ -63,3 +63,8 @@ backend/data/
 *.tsbuildinfo
 next-env.d.ts
 frontend/next-env.d.ts
+
+# Downloadable ML assets
+backend/models/*.task
+backend/models/whisper/
+backend/models/filled_pause/
