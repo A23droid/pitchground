@@ -8,7 +8,7 @@ const steps = ["Observe", "Compare", "Diagnose", "Remember", "Target", "Recreate
 export function LoopStepper() {
   return (
     <div className="relative w-full -mx-4 sm:mx-0 px-4 sm:px-0">
-      <div className="flex w-full overflow-x-auto pb-6 sm:pb-0 hide-scrollbar snap-x snap-mandatory sm:flex-wrap lg:flex-nowrap items-center justify-start sm:justify-center lg:justify-center gap-2 sm:gap-2">
+      <div className="flex w-full overflow-x-auto pb-6 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory sm:flex-wrap lg:flex-nowrap items-center justify-start sm:justify-center lg:justify-center gap-2 sm:gap-2">
         {steps.map((step, i) => (
           <motion.div
             key={step}

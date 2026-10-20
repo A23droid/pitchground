@@ -1,0 +1,79 @@
+.page {
+  min-height: 100dvh;
+}
+
+.panel {
+  width: 100%;
+  max-width: 27rem;
+}
+
+.card {
+  padding: clamp(1.5rem, 5vw, 2rem);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-height: 3.25rem;
+  padding: .75rem .875rem;
+  border: 1px solid var(--line);
+  border-radius: .875rem;
+  background: var(--paper);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.field:focus-within {
+  border-color: var(--lavender-ink);
+  box-shadow: 0 0 0 3px rgb(207 189 247 / .24);
+}
+
+.field > span {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.field input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  color-scheme: light;
+}
+
+.field input:focus,
+.field input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.field input:autofill {
+  box-shadow: 0 0 0 1000px var(--paper) inset;
+  color: var(--ink);
+}
+
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--paper) inset;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+}
+
+.google button {
+  min-height: 3rem;
+  margin-top: 0;
+}
+
+@media (max-width: 359px) {
+  .demo {
+    padding-inline: .625rem;
+    font-size: .8125rem;
+  }
+}
