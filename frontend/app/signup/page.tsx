@@ -11,6 +11,7 @@ import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
 import { completeTokenLogin } from "@/lib/auth";
 import { authJson } from "@/lib/api";
 import { ArrowRight, ArrowLeft, Mail, Lock, User } from "lucide-react";
+import styles from "../login/login.module.css";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -38,12 +39,12 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-12">
+    <main className={`${styles.page} flex items-center justify-center px-4 py-8 sm:py-12`}>
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-sm"
+        className={styles.panel}
       >
         <button
           type="button"
@@ -54,13 +55,13 @@ export default function SignupPage() {
           Back
         </button>
 
-        <Link href="/" className="mb-8 flex justify-center">
+        <Link href="/" className="mb-6 flex justify-center">
           <Logo />
         </Link>
 
-        <Card className="p-7 sm:p-8">
+        <Card className={styles.card}>
           <h1 className="font-display text-2xl text-ink">Create your account</h1>
-          <p className="mt-1 text-sm text-ink-soft">Pitchground starts building your communication profile from session one.</p>
+          <p className="mt-2 text-sm leading-relaxed text-ink-soft">Pitchground starts building your communication profile from session one.</p>
 
           {errorMsg ? (
             <p className="mt-4 rounded-xl border border-rose/40 bg-rose-soft px-3.5 py-2.5 text-xs text-rose-ink">
@@ -68,7 +69,7 @@ export default function SignupPage() {
             </p>
           ) : null}
 
-          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
+          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-5">
             <Field label="Name" icon={<User size={14} />}>
               <input
                 type="text"
@@ -100,22 +101,24 @@ export default function SignupPage() {
               />
             </Field>
 
-            <Button type="submit" size="lg" disabled={submitting} className="mt-2 w-full">
+            <Button type="submit" size="lg" disabled={submitting} className="mt-1 h-12 w-full text-[15px]">
               {submitting ? "Creating account…" : "Create account"}
               {!submitting && <ArrowRight size={16} />}
             </Button>
           </form>
 
-          <div className="my-5 flex items-center gap-3">
+          <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-line" />
             <span className="text-xs text-muted">or continue with</span>
             <div className="h-px flex-1 bg-line" />
           </div>
 
-          <GoogleSignInButton callbackUrl="/start" />
+          <div className={styles.google}>
+            <GoogleSignInButton callbackUrl="/start" />
+          </div>
         </Card>
 
-        <p className="mt-5 text-center text-sm text-ink-soft">
+        <p className="mt-6 text-center text-sm leading-relaxed text-ink-soft">
           Already training with us?{" "}
           <Link href="/login" className="font-medium text-ink underline underline-offset-2">
             Log in
@@ -130,7 +133,7 @@ function Field({ label, icon, children }: { label: string; icon: React.ReactNode
   return (
     <label className="block">
       <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">{label}</span>
-      <div className="flex items-center gap-2.5 rounded-xl border border-line bg-paper px-3.5 py-3 transition-colors focus-within:border-lavender-ink/50">
+      <div className={styles.field}>
         <span className="text-muted">{icon}</span>
         {children}
       </div>
