@@ -1,0 +1,6 @@
+{
+  "Rules": [
+    {"ID": "expire-pitchground-jobs", "Status": "Enabled", "Filter": {"Prefix": "pitchground/jobs/"}, "Expiration": {"Days": 1}, "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1}},
+    {"ID": "expire-pitchground-results", "Status": "Enabled", "Filter": {"Prefix": "pitchground/results/"}, "Expiration": {"Days": 1}}
+  ]
+}

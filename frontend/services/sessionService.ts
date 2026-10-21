@@ -127,7 +127,7 @@ export async function waitForPhase(
   while (Date.now() - start < timeoutMs) {
     const session = await getSession(sessionId);
     if (phases.includes(session.phase)) return session;
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 2000));
   }
   throw new Error(`Timed out waiting for phases: ${phases.join(", ")}`);
 }
@@ -135,25 +135,25 @@ export async function waitForPhase(
 export async function waitForAttemptComplete(
   sessionId: string,
   attemptId: string,
-  timeoutMs = 600000,
+  timeoutMs = 1800000,
 ): Promise<any> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const attempt = await getAttempt(sessionId, attemptId);
     if (attempt.analysis_status === "complete" && attempt.metrics) return attempt;
     if (attempt.analysis_status === "failed") throw new Error(attempt.analysis_error?.message ? `${attempt.analysis_error.message}${attempt.analysis_error.retry_after ? ` Retry in ${attempt.analysis_error.retry_after}s.` : ""}` : "Analysis failed. Please retry.");
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 2000));
   }
   throw new Error("Timed out waiting for analysis");
 }
 
-export async function waitForAttemptTranscript(sessionId: string, attemptId: string, timeoutMs = 600000): Promise<any> {
+export async function waitForAttemptTranscript(sessionId: string, attemptId: string, timeoutMs = 1800000): Promise<any> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const attempt = await getAttempt(sessionId, attemptId);
     if (attempt.transcript_validated && attempt.transcript?.text?.trim()) return attempt;
     if (attempt.analysis_status === "failed") throw new Error(attempt.analysis_error?.message || "Transcription failed. Retry this recording.");
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 2000));
   }
   throw new Error("Transcription is taking too long. Retry this recording.");
 }

@@ -1,0 +1,17 @@
+FROM python:3.11-slim-bookworm
+ARG WHISPER_MODEL=small
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 ML_EXECUTION_MODE=local \
+    WHISPER_MODEL=${WHISPER_MODEL} WHISPER_CPU_THREADS=4 FILLER_CPU_THREADS=4
+WORKDIR /srv/pitchground
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsndfile1 libgl1 libglib2.0-0 libgomp1 && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 'torch>=2.2,<2.15' \
+    && pip install --no-cache-dir -r requirements.txt 'boto3>=1.35,<2'
+COPY app ./app
+COPY download_vision_models.py download_speech_model.py download_filler_model.py sagemaker_entrypoint.py ./
+RUN python download_vision_models.py && python download_speech_model.py && python download_filler_model.py
+RUN python -c "import mediapipe as mp; assert mp.tasks.vision.FaceLandmarker"
+EXPOSE 8080
+# SageMaker's custom-container contract requires root and adds the `serve` argument.
+ENTRYPOINT ["python", "sagemaker_entrypoint.py"]

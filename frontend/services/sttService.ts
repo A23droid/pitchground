@@ -48,5 +48,17 @@ export async function transcribeAudioBlob(
     throw new Error(`STT failed (${res.status}): ${errText}`);
   }
 
-  return res.json();
+  const response = await res.json();
+  if (res.status !== 202) return response;
+  if (!response.job_id) throw new Error("Speech service returned no job identifier.");
+  const started = Date.now();
+  while (Date.now() - started < 30 * 60 * 1000) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const polled = await fetch(`${API_BASE}/v1/stt/jobs/${encodeURIComponent(response.job_id)}`, { headers });
+    const job = await polled.json();
+    if (!polled.ok) throw new Error(job.detail || "Could not retrieve speech analysis. Please retry.");
+    if (job.status === "complete") return job.result;
+    if (job.status === "failed") throw new Error(job.error?.message || "Speech analysis failed. Please retry.");
+  }
+  throw new Error("Speech analysis timed out. Please retry this recording.");
 }
