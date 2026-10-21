@@ -99,6 +99,7 @@ Browser speech and analysis polling waits up to 30 minutes for cold-start/queued
 
 - **AWS credential error:** check the Render IAM key pair, region, optional token expiry, IAM policy and exact endpoint ARN. The worker uses its execution role, never Render's keys.
 - **AccessDenied for S3:** check both policies, bucket policy and prefixes. This setup assumes SSE-S3; a bucket enforcing KMS needs additional key configuration and KMS permissions.
+- **Endpoint creation says execution role is invalid:** the worker role must allow bucket-level `s3:ListBucket` without an `s3:prefix` condition, because SageMaker validates the dedicated input/output bucket with a bucket-level check. Object reads and writes remain scoped to the job and result prefixes. The Render caller's separate ListBucket permission can remain prefix-scoped.
 - **Endpoint quota/capacity error:** request the asynchronous instance quota in that region or choose an available compatible instance. Do not swap to an ARM instance for this x86 image.
 - **Queued indefinitely:** inspect the wake alarm, autoscaling events, endpoint state, SageMaker role access to the input bucket, and CloudWatch logs. Do not remove the wake-from-zero policy.
 - **Model asset/startup error:** rebuild the image with all three vision assets, Whisper cache and the filled-pause classifier. No silent reduced-quality fallback is added.
