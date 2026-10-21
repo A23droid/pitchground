@@ -3,7 +3,7 @@
   "Statement": [
     {"Effect": "Allow", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::BUCKET_NAME/pitchground/jobs/*"},
     {"Effect": "Allow", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::BUCKET_NAME/pitchground/results/*"},
-    {"Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::BUCKET_NAME", "Condition": {"StringLike": {"s3:prefix": ["pitchground/jobs/*", "pitchground/results/*"]}}},
+    {"Effect": "Allow", "Action": ["s3:ListBucket", "s3:GetBucketLocation"], "Resource": "arn:aws:s3:::BUCKET_NAME"},
     {"Effect": "Allow", "Action": "ecr:GetAuthorizationToken", "Resource": "*"},
     {"Effect": "Allow", "Action": ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"], "Resource": "arn:aws:ecr:REGION:ACCOUNT_ID:repository/pitchground-ml"},
     {"Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"], "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/sagemaker/*"},
