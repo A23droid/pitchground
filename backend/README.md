@@ -2,6 +2,8 @@
 
 FastAPI backend: verified JWT/Google sign-in, five practice modes, local Faster-Whisper STT, MediaPipe vision, Groq questions, answer review and coaching.
 
+**Render 512 MB + AWS SageMaker:** follow [SAGEMAKER_DEPLOY.md](../docs/SAGEMAKER_DEPLOY.md). Install `requirements-api.txt` on Render and run the full model container on SageMaker. Local development still uses `requirements.txt` and `ML_EXECUTION_MODE=local`.
+
 **Database / media:** SQLite+local disk by default, or **Nhost Postgres + Storage** when configured. See [../docs/NHOST_SETUP.md](../docs/NHOST_SETUP.md).
 
 ## Run locally

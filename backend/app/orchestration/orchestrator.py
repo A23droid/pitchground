@@ -216,10 +216,11 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
         key_points = rubric.get("key_points", [])
 
         local_audio = resolve_local_path(attempt.audio_path)
+        if attempt.audio_path.startswith(NHOST_PREFIX) and local_audio:
+            downloads.append(Path(local_audio))
         local_video = resolve_local_path(attempt.video_path) if attempt.video_path else None
-        for original, resolved in ((attempt.audio_path, local_audio), (attempt.video_path, local_video)):
-            if original and original.startswith(NHOST_PREFIX) and resolved:
-                downloads.append(Path(resolved))
+        if attempt.video_path and attempt.video_path.startswith(NHOST_PREFIX) and local_video:
+            downloads.append(Path(local_video))
         transcriber = get_transcriber()
         analyzer = get_analyzer()
         lang_hint = metadata.get("language") or {"Hindi": "hi", "English": "en", "Malayalam": "ml", "Mixed": "auto"}.get(session.language, "auto")
@@ -271,66 +272,7 @@ def analyze_attempt_job(session_id: str, attempt_id: str) -> None:
             bundle.recovery = measure_recovery(local_audio, transcript, config, metadata.get("interruption_sec"), analyzer)
 
 
-        if attempt.transcript:
-            attempt.transcript.text = transcript.text
-            attempt.transcript.language = transcript.language
-            attempt.transcript.segments_json = json.dumps([s.model_dump() for s in transcript.segments])
-        else:
-            db.add(
-                TranscriptRow(
-                    attempt_id=attempt.id,
-                    text=transcript.text,
-                    language=transcript.language,
-                    segments_json=json.dumps([s.model_dump() for s in transcript.segments]),
-                )
-            )
-
-        if attempt.metrics:
-            attempt.metrics.signal_bundle_json = bundle.model_dump_json()
-        else:
-            attempt.metrics = AttemptMetrics(signal_bundle_json=bundle.model_dump_json())
-
-        if attempt.role == "baseline":
-            vec = baseline_vector(bundle)
-            if session.baseline:
-                session.baseline.vector_json = json.dumps(vec)
-            else:
-                db.add(Baseline(session_id=session.id, vector_json=json.dumps(vec)))
-            if session.phase == "baseline_recording":
-                session.phase = "baseline_analyzed"
-                _set_action(session, {"type": "wait_analysis", "ui_hints": {"show_timer": False, "show_evidence": True}})
-
-        if attempt.role == "pressure" and session.phase == "pressure_recording":
-            session.phase = "pressure_analyzed"
-            _set_action(session, {"type": "wait_analysis", "ui_hints": {"show_timer": False, "show_evidence": True}})
-
-        if attempt.role == "retry" and session.phase == "retry_recording":
-            session.phase = "comparing"
-
-        attempt.analysis_status = "complete"
-        attempt.status = "complete"
-        update_from_bundle(db, session.learner_id, bundle)
-        db.commit()
-
-        import asyncio
-
-        payload = {
-            "attempt_id": attempt.id,
-            "role": attempt.role,
-            "fused": bundle.fused.model_dump(),
-            "quality": bundle.quality.model_dump(),
-        }
-        try:
-            asyncio.run(hub.broadcast(session.id, "attempt_scored", session.phase, payload))
-        except RuntimeError:
-            # Already inside a running loop (e.g. tests) — schedule best-effort.
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(hub.broadcast(session.id, "attempt_scored", session.phase, payload))
-            except Exception:
-                pass
-        except Exception:
-            pass
+        store_analysis_bundle(db, session, attempt, bundle)
     except Exception as exc:
         logging.getLogger(__name__).exception("Attempt analysis failed for %s", attempt_id)
         db.rollback()
@@ -386,11 +328,6 @@ def run_diagnosis_pipeline(db: Session, session: SessionModel) -> None:
 
     transcript = pressure_a.transcript.text if pressure_a.transcript else ""
     diagnosis = render_diagnosis(candidates, evidence, transcript)
-    item = (
-        _bank(db, session.topic, "retry")
-        or _bank(db, session.topic, "pressure")
-        or _bank(db, "Database Systems", "retry")
-    )
     challenge = render_challenge(
         diagnosis,
         pressure_a.prompt,
@@ -456,3 +393,73 @@ def run_comparison_pipeline(db: Session, session: SessionModel) -> None:
     else:
         db.add(ComparisonRow(session_id=session.id, payload_json=json.dumps(report)))
     db.commit()
+
+
+def store_analysis_bundle(db: Session, session: SessionModel, attempt: Attempt, bundle: SignalBundle) -> None:
+    """Persist either execution mode through the same state and scoring transitions."""
+    transcript = bundle.transcript
+    if bundle.attempt_id != attempt.id or not bundle.quality.audio_ok:
+        raise ValueError("Invalid analysis result or no usable speech detected")
+    metadata = json.loads(attempt.pressure_spec_json or "{}")
+    metadata["transcription"] = {**transcript.provenance, "pipeline_version": SPEECH_PIPELINE_VERSION, "confidence": transcript.confidence}
+    attempt.pressure_spec_json = json.dumps(metadata)
+    if attempt.transcript:
+        attempt.transcript.text = transcript.text
+        attempt.transcript.language = transcript.language
+        attempt.transcript.segments_json = json.dumps([s.model_dump() for s in transcript.segments])
+    else:
+        db.add(
+            TranscriptRow(
+                attempt_id=attempt.id,
+                text=transcript.text,
+                language=transcript.language,
+                segments_json=json.dumps([s.model_dump() for s in transcript.segments]),
+            )
+        )
+
+    if attempt.metrics:
+        attempt.metrics.signal_bundle_json = bundle.model_dump_json()
+    else:
+        attempt.metrics = AttemptMetrics(signal_bundle_json=bundle.model_dump_json())
+
+    if attempt.role == "baseline":
+        vec = baseline_vector(bundle)
+        if session.baseline:
+            session.baseline.vector_json = json.dumps(vec)
+        else:
+            db.add(Baseline(session_id=session.id, vector_json=json.dumps(vec)))
+        if session.phase == "baseline_recording":
+            session.phase = "baseline_analyzed"
+            _set_action(session, {"type": "wait_analysis", "ui_hints": {"show_timer": False, "show_evidence": True}})
+
+    if attempt.role == "pressure" and session.phase == "pressure_recording":
+        session.phase = "pressure_analyzed"
+        _set_action(session, {"type": "wait_analysis", "ui_hints": {"show_timer": False, "show_evidence": True}})
+
+    if attempt.role == "retry" and session.phase == "retry_recording":
+        session.phase = "comparing"
+
+    attempt.analysis_status = "complete"
+    attempt.status = "complete"
+    update_from_bundle(db, session.learner_id, bundle)
+    db.commit()
+
+    import asyncio
+
+    payload = {
+        "attempt_id": attempt.id,
+        "role": attempt.role,
+        "fused": bundle.fused.model_dump(),
+        "quality": bundle.quality.model_dump(),
+    }
+    try:
+        asyncio.run(hub.broadcast(session.id, "attempt_scored", session.phase, payload))
+    except RuntimeError:
+        # Already inside a running loop (e.g. tests) — schedule best-effort.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(hub.broadcast(session.id, "attempt_scored", session.phase, payload))
+        except Exception:
+            pass
+    except Exception:
+        pass

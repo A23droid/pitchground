@@ -11,6 +11,8 @@ from app.models import Attempt, EvidenceRow, Learner, SessionEvent, Session as S
 from app.orchestration.orchestrator import analyze_attempt_job, create_attempt
 from app.schemas.api import AttemptCreate
 from app.storage.media import save_upload
+from app.storage.upload_limits import validate_upload
+from app.ml import sagemaker
 from app.ml.speech_quality import SPEECH_PIPELINE_VERSION
 
 router = APIRouter(prefix="/v1/sessions/{session_id}/attempts", tags=["attempts"])
@@ -62,20 +64,13 @@ async def upload_media(
 
     if attempt.analysis_status not in ("pending", "failed"):
         raise HTTPException(status_code=409, detail="This recording is already queued or analyzed.")
-    audio_bytes = await audio.read()
-    if len(audio_bytes) < 200:
-        raise HTTPException(status_code=415, detail="Media missing usable audio")
+    bytes_audio = await validate_upload(audio, "audio")
+    bytes_video = await validate_upload(video, "video") if video else 0
     try:
-        audio_path = await save_upload(session_id, attempt_id, "audio", audio.filename or "audio.webm", audio_bytes)
+        audio_path = await save_upload(session_id, attempt_id, "audio", audio.filename or "audio.webm", audio.file)
         video_path = None
-        bytes_video = 0
-        if video is not None:
-            video_bytes = await video.read()
-            if video_bytes:
-                video_path = await save_upload(
-                    session_id, attempt_id, "video", video.filename or "video.webm", video_bytes
-                )
-                bytes_video = len(video_bytes)
+        if video is not None and bytes_video:
+            video_path = await save_upload(session_id, attempt_id, "video", video.filename or "video.webm", video.file)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -88,7 +83,7 @@ async def upload_media(
     return {
         "audio_path": audio_path,
         "video_path": video_path,
-        "bytes_audio": len(audio_bytes),
+        "bytes_audio": bytes_audio,
         "bytes_video": bytes_video,
     }
 
@@ -109,6 +104,10 @@ def complete_attempt(
         raise HTTPException(status_code=415, detail="Media missing audio")
     if attempt.analysis_status in ("queued", "complete"):
         return {"attempt_id": attempt_id, "analysis_status": attempt.analysis_status}
+    if sagemaker.enabled():
+        from app.orchestration.sagemaker_jobs import submit_attempt
+        submit_attempt(db, session, attempt)
+        return {"attempt_id": attempt_id, "analysis_status": attempt.analysis_status}
     attempt.analysis_status = "queued"
     db.commit()
     background.add_task(analyze_attempt_job, session_id, attempt_id)
@@ -126,6 +125,9 @@ def get_attempt(
     attempt = db.get(Attempt, attempt_id)
     if not attempt or attempt.session_id != session.id:
         raise HTTPException(status_code=404, detail="Attempt not found")
+    if sagemaker.enabled():
+        from app.orchestration.sagemaker_jobs import refresh_attempt
+        refresh_attempt(db, session, attempt)
     evidence_rows = db.query(EvidenceRow).filter(EvidenceRow.attempt_id == attempt.id).all()
     evidence_list = []
     for e in evidence_rows:

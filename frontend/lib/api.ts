@@ -29,7 +29,7 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
   } catch (err) {
     const hint =
       err instanceof TypeError
-        ? `Cannot reach API at ${API_URL}. Is the backend running on :8000?`
+        ? `Cannot reach API at ${API_URL}. The backend may be starting or temporarily unavailable. Please retry shortly.`
         : err instanceof Error
           ? err.message
           : "Network error";

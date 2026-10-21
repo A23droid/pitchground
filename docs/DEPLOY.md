@@ -1,5 +1,7 @@
 # Deploy environment matrix
 
+**Current full-quality cloud deployment:** use [SAGEMAKER_DEPLOY.md](SAGEMAKER_DEPLOY.md) for Render + SageMaker. The legacy stub/fallback settings below are unsupported and must not be used.
+
 > Historical demo deployment plan. Production no longer supports stub metrics or silent database/storage fallback. See [IMPROVEMENT_CHECKLIST.md](IMPROVEMENT_CHECKLIST.md) and the current backend README.
 
 ## Local backend (`backend/.env`)

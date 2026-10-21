@@ -12,10 +12,13 @@ from app.api.ws import sessions as ws_sessions
 from app.auth import router as auth_router
 from app.config import CORS_ORIGINS, ensure_data_dirs
 from app.db import Base, SessionLocal, engine
+from app.ml.sagemaker import SageMakerError, enabled, settings
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if enabled():
+        settings()
     ensure_data_dirs()
     # Import models so metadata is registered
     import app.models  # noqa: F401
@@ -29,6 +32,11 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Pitchground API", version="0.2.0", lifespan=lifespan)
+
+
+@app.exception_handler(SageMakerError)
+def sagemaker_error_response(request: Request, exc: SageMakerError):
+    return JSONResponse(status_code=exc.status, content={"detail": str(exc), "code": exc.code})
 
 app.add_middleware(
     CORSMiddleware,

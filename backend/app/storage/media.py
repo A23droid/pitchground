@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+import shutil
+import os
+from typing import BinaryIO
 from pathlib import Path
 
 import httpx
@@ -29,15 +32,19 @@ def _nhost_headers() -> dict[str, str]:
     return {"x-hasura-admin-secret": NHOST_ADMIN_SECRET}
 
 
-async def _save_local(session_id: str, attempt_id: str, field: str, filename: str, data: bytes) -> str:
+async def _save_local(session_id: str, attempt_id: str, field: str, filename: str, data: bytes | BinaryIO) -> str:
     directory = attempt_dir(session_id, attempt_id)
     suffix = Path(filename).suffix or (".webm" if field == "audio" else ".mp4")
     dest = directory / f"{field}{suffix}"
-    dest.write_bytes(data)
+    with dest.open("wb") as output:
+        if isinstance(data, bytes):
+            output.write(data)
+        else:
+            shutil.copyfileobj(data, output, 64 * 1024)
     return str(dest)
 
 
-async def _save_nhost(session_id: str, attempt_id: str, field: str, filename: str, data: bytes) -> str:
+async def _save_nhost(session_id: str, attempt_id: str, field: str, filename: str, data: bytes | BinaryIO) -> str:
     base = nhost_storage_base_url()
     if not base or not NHOST_ADMIN_SECRET:
         raise RuntimeError("Nhost storage is not configured (NHOST_SUBDOMAIN/REGION/ADMIN_SECRET).")
@@ -70,7 +77,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def save_upload(session_id: str, attempt_id: str, field: str, filename: str, data: bytes) -> str:
+async def save_upload(session_id: str, attempt_id: str, field: str, filename: str, data: bytes | BinaryIO) -> str:
     if STORAGE_BACKEND == "nhost":
         return await _save_nhost(session_id, attempt_id, field, filename, data)
     return await _save_local(session_id, attempt_id, field, filename, data)
@@ -86,19 +93,25 @@ def resolve_local_path(ref: str) -> str:
     file_id = ref[len(NHOST_PREFIX) :]
     base = nhost_storage_base_url()
     if not base or not NHOST_ADMIN_SECRET:
-        return ""
+        raise RuntimeError("Nhost media storage is not configured")
 
     url = f"{base}/files/{file_id}"
-    with httpx.Client(timeout=60) as client:
-        res = client.get(url, headers=_nhost_headers())
-    if res.status_code >= 400:
-        return ""
-
-    suffix = ".webm"
-    cd = res.headers.get("content-disposition") or ""
-    if ".wav" in cd:
-        suffix = ".wav"
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    tmp.write(res.content)
-    tmp.close()
-    return tmp.name
+    maximum = int(os.getenv("MAX_VIDEO_UPLOAD_MB", "64")) * 1024**2
+    path = None
+    try:
+        with httpx.Client(timeout=60) as client, client.stream("GET", url, headers=_nhost_headers()) as response:
+            response.raise_for_status()
+            suffix = ".wav" if ".wav" in response.headers.get("content-disposition", "") else ".webm"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as output:
+                path = output.name
+                size = 0
+                for chunk in response.iter_bytes(64 * 1024):
+                    size += len(chunk)
+                    if size > maximum:
+                        raise RuntimeError("Stored recording exceeds the media size limit")
+                    output.write(chunk)
+        return path
+    except Exception as exc:
+        if path:
+            Path(path).unlink(missing_ok=True)
+        raise RuntimeError("Could not download the stored recording. Retry analysis.") from exc

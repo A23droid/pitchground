@@ -1,0 +1,19 @@
+version: 0.2
+env:
+  shell: bash
+phases:
+  pre_build:
+    commands:
+      - set -euo pipefail
+      - 'if ! docker info >/dev/null 2>&1; then nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock >/tmp/dockerd.log 2>&1 & timeout 60 sh -c "until docker info >/dev/null 2>&1; do sleep 1; done"; fi'
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+  build:
+    commands:
+      - docker build --platform linux/amd64 --build-arg WHISPER_MODEL=small -f Dockerfile.sagemaker -t "$IMAGE_URI" .
+      - docker run -d --name pitchground-smoke -p 8080:8080 "$IMAGE_URI" serve
+      - 'timeout 60 sh -c "until curl --fail --silent http://127.0.0.1:8080/ping; do sleep 2; done"'
+      - docker stop pitchground-smoke
+      - docker rm pitchground-smoke
+  post_build:
+    commands:
+      - 'if [ "$CODEBUILD_BUILD_SUCCEEDING" = "1" ]; then docker push "$IMAGE_URI"; else exit 1; fi'

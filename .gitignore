@@ -26,6 +26,7 @@ frontend/out/
 
 # production
 /build
+/.deployment/
 
 # misc
 .DS_Store
