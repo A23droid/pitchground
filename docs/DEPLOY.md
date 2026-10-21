@@ -24,6 +24,20 @@ Do **not** point local `.env` URLs at production unless intentional.
 
 ## Render (backend)
 
+The repository and `backend/` both include `.python-version` set to `3.11`,
+so deployments use the same Python series whether the service root is the
+repository or `backend/`. Keep these files in sync.
+
+The `av>=12,<14` dependency has prebuilt Linux wheels for Python 3.11, but
+not Python 3.14. Using Render's Python 3.14 default causes pip to compile
+PyAV from source and fail because FFmpeg development libraries are absent.
+See [Render's Python version settings](https://render.com/docs/python-version).
+
+If the service has a `PYTHON_VERSION` environment variable, remove it to use
+the version file (or set it to a fully qualified Python 3.11 patch version).
+That environment variable overrides `.python-version`. Redeploy after pushing
+the version files and confirm the build log selects Python 3.11.
+
 | Variable | Value |
 |----------|-------|
 | `FRONTEND_URL` | `https://pitch-ground.vercel.app` |
